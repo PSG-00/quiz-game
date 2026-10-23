@@ -1,0 +1,1062 @@
+{
+  "version": 1,
+  "quizzes": [
+    {
+      "id": "quiz_legacy_room_2c2079",
+      "title": "🎉 파스텔 100인 퀴즈쇼!",
+      "targetWinners": 2,
+      "questions": [
+        {
+          "type": "OX",
+          "question": "문어의 심장은 3개다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "다음 중 포유류는?",
+          "answer": "1",
+          "choices": [
+            "고래",
+            "상어",
+            "문어",
+            "참치"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "바나나는 나무가 아니라 거대한 여러해살이 풀이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "대한민국의 수도는?",
+          "answer": "서울,서울특별시",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "북극곰의 피부색은 흰색이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "legacyRoomId": "room_2c2079",
+      "legacyOwnerHash": "fd77c096eb425c1828bf9cadf65646b2f5b04987675b8a3110a076cfbe21db0c",
+      "ownerHash": "88ac44e3a86207d3cd0709ad8d833e6e093e554637457efa8ecec083fceaa321",
+      "createdAt": "2026-10-21T18:59:03.542Z",
+      "updatedAt": "2026-10-21T19:40:46.724Z",
+      "code": "MYX9LU"
+    },
+    {
+      "questions": [
+        {
+          "type": "OX",
+          "question": "리센느의 데뷔 200일(10월11일)은 멤버 '리브'의 생일과 같은 날이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느 멤버 5명의 출생연도는 모두 짝수 해이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느가 데뷔 후 최초로 '초동 판매량 10만 장'을 돌파한 앨범은?",
+          "answer": "4",
+          "choices": [
+            "Re:Scene",
+            "Glow Up",
+            "Dearest",
+            "lip bomb"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느에게 데뷔 첫 음방 1위 트로피(《더 쇼》)를 안겨준 곡은?",
+          "answer": "3",
+          "choices": [
+            "UhUh",
+            "Pinball",
+            "Pretty Girl",
+            "Love Attack"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느의 정식 데뷔 날짜(월/일)는 언제일까요? (숫자 4자리로 입력, 예: 0101)",
+          "answer": "0326",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "2026년 역주행으로 멜론 차트 1위와 인기가요 1위를 달성한 리센느의 대표곡 제목은? (띄어쓰기 없이 한글 4글자)",
+          "answer": "러브어택",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "벽갤을 울리는 리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_77983987-160a-4ed3-a019-c8f76135f5b8",
+      "ownerHash": "104a4309bd4a7ea6adff6641f9151ca009963091296202001f68bb1c9da37e61",
+      "createdAt": "2026-10-21T19:48:31.998Z",
+      "updatedAt": "2026-10-21T19:54:57.005Z",
+      "code": "GV68YG"
+    },
+    {
+      "questions": [
+        {
+          "type": "OX",
+          "question": "북극곰의 피부색은 흰색이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_93c1d6d9-399a-4e9a-8e0e-3ef2572780dd",
+      "ownerHash": "4ab5fcc5d9ef60f586c4c0c425ad9e666ec8c4936ae0926ad935c1c06e5227a2",
+      "createdAt": "2026-10-22T13:40:02.461Z",
+      "updatedAt": "2026-10-22T13:40:02.461Z",
+      "code": "ZR7VXJ"
+    },
+    {
+      "questions": [
+        {
+          "type": "SHORT",
+          "question": "리센느의 정식 데뷔일(월/일)은 언제일까요? (숫자 4자리, 예: 0101)",
+          "answer": "0326",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느는 한국인 멤버 3명과 일본인 멤버 2명으로 구성된 5인조 걸그룹이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느의 공식 팬덤 이름은 무엇일까요?",
+          "answer": "2",
+          "choices": [
+            "리센트",
+            "리마인",
+            "리멤버",
+            "샌드백"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "2026년 여름, 기적의 역주행으로 멜론 차트 1위와 인기가요 1위를 달성한 리센느의 대표곡 제목은? (띄어쓰기 없이 한글 4글자)",
+          "answer": "러브어택",
+          "choices": [
+            "UhUh",
+            "Pinball",
+            "Pretty Girl",
+            "Love Attack"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느 멤버 중 최장신인 멤버는 '메이(MAY)'이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느 멤버들의 생년(출생연도)에 대한 설명 중 옳은 것은?",
+          "answer": "1",
+          "choices": [
+            "멤버 전원이 짝수 해에 태어났다",
+            "팀의 리더와 막내는 6살 차이다",
+            "팀에 1990년대생 멤버가 있다",
+            "멤버 전원이 동갑인 멤버가 있다"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느에게 '데뷔 첫 음악방송 1위' 트로피를 안겨준 곡과 프로그램은?",
+          "answer": "2",
+          "choices": [
+            "〈LOVE ATTACK〉 - SBS 《인기가요》",
+            "〈Pretty Girl〉 - SBS Life 《더 쇼》",
+            "〈Pretty Girl〉 - MBC 《쇼! 음악중심》",
+            "〈Bloom〉 - Mnet 《엠카운트다운》"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 프리 데뷔 선공개 싱글인 〈YoYo〉가 발매된 날은 4년에 한 번 오는 윤일인 '2월 29일'이었다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 최초로 '한터차트 기준 초동 10만 장'을 돌파했던 미니 3집의 앨범 이름은? (띄어쓰기 없이 한글 2글자)",
+          "answer": "립밤",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 정식 데뷔일로부터 정확히 '데뷔 200일'이 되던 날은 멤버 '리브'의 생일이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔한 날부터, 〈Pretty Girl〉로 감격의 데뷔 첫 음방 1위를 달성하기까지 걸린 일수는 총 며칠일까요? (숫자만 입력)",
+          "answer": "841",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "50% 확률로 부활하는 찬스타임!",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 5,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느가 지금까지 음악방송에서 받은 '1위 트로피'는 통산 총 몇 개일까요?",
+          "answer": "3",
+          "choices": [
+            "4",
+            "5",
+            "6",
+            "7"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "〈LOVE ATTACK〉이 기적의 역주행으로 '멜론 TOP100 1위'를 처음 찍었던 날짜(월/일)는? (숫자 4자리, 예: 0101)",
+          "answer": "0708",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 두 번째로 방문했던 대학 축제의 학교 이름은? (띄어쓰기 없이 한글 5글자)",
+          "answer": "서일대학교",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "테스트용 리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_8edef659-3641-4a26-b2f0-3ec0f41e80c3",
+      "ownerHash": "104a4309bd4a7ea6adff6641f9151ca009963091296202001f68bb1c9da37e61",
+      "createdAt": "2026-10-22T15:36:58.583Z",
+      "updatedAt": "2026-10-22T18:21:31.050Z",
+      "code": "VXCHV3"
+    },
+    {
+      "questions": [
+        {
+          "type": "OX",
+          "question": "북극곰의 피부색은 흰색이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_a6f87ec5-b6d7-473e-a543-77674dc8bda1",
+      "ownerHash": "33a2dff5dbda20cd6445dd34445dde512a6436ee1ed766963db434abe993fa08",
+      "createdAt": "2026-10-22T18:33:06.700Z",
+      "updatedAt": "2026-10-22T18:33:06.700Z",
+      "code": "FATF6T"
+    },
+    {
+      "questions": [
+        {
+          "type": "OX",
+          "question": "북극곰의 피부색은 흰색이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_ae797a9d-e22c-4001-9655-4aa21398cb2b",
+      "ownerHash": "e5eeaae3045adb69ccc572bd84cbca89e1ee80680a7238f454186bfe9a131ee0",
+      "createdAt": "2026-10-22T18:36:07.929Z",
+      "updatedAt": "2026-10-22T18:36:07.929Z",
+      "code": "697KEU"
+    },
+    {
+      "questions": [
+        {
+          "type": "SHORT",
+          "question": "리센느의 정식 데뷔일(월/일)은 언제일까요? (숫자 4자리, 예: 0101)",
+          "answer": "0326",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느는 한국인 멤버 3명과 일본인 멤버 2명으로 구성된 5인조 걸그룹이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느의 공식 팬덤 이름은 무엇일까요?",
+          "answer": "2",
+          "choices": [
+            "리센트",
+            "리마인",
+            "리멤버",
+            "샌드백"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "2026년 여름, 기적의 역주행으로 멜론 차트 1위와 인기가요 1위를 달성한 리센느의 대표곡 제목은? (띄어쓰기 없이 한글 4글자)",
+          "answer": "러브어택",
+          "choices": [
+            "UhUh",
+            "Pinball",
+            "Pretty Girl",
+            "Love Attack"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느 멤버 중 최장신인 멤버는 '메이(MAY)'이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느 멤버들의 생년(출생연도)에 대한 설명 중 옳은 것은?",
+          "answer": "1",
+          "choices": [
+            "멤버 전원이 짝수 해에 태어났다",
+            "팀의 리더와 막내는 6살 차이다",
+            "팀에 1990년대생 멤버가 있다",
+            "멤버 전원이 동갑인 멤버가 있다"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느에게 '데뷔 첫 음악방송 1위' 트로피를 안겨준 곡과 프로그램은?",
+          "answer": "2",
+          "choices": [
+            "〈LOVE ATTACK〉 - SBS 《인기가요》",
+            "〈Pretty Girl〉 - SBS Life 《더 쇼》",
+            "〈Pretty Girl〉 - MBC 《쇼! 음악중심》",
+            "〈Bloom〉 - Mnet 《엠카운트다운》"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 프리 데뷔 선공개 싱글인 〈YoYo〉가 발매된 날은 4년에 한 번 오는 윤일인 '2월 29일'이었다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 최초로 '한터차트 기준 초동 10만 장'을 돌파했던 미니 3집의 앨범 이름은? (띄어쓰기 없이 한글 2글자)",
+          "answer": "립밤",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 정식 데뷔일로부터 정확히 '데뷔 200일'이 되던 날은 멤버 '리브'의 생일이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔한 날부터, 〈Pretty Girl〉로 감격의 데뷔 첫 음방 1위를 달성하기까지 걸린 일수는 총 며칠일까요? (숫자만 입력)",
+          "answer": "841",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "50% 확률로 부활하는 찬스타임!",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 5,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느가 지금까지 음악방송에서 받은 '1위 트로피'는 통산 총 몇 개일까요?",
+          "answer": "3",
+          "choices": [
+            "4",
+            "5",
+            "6",
+            "7"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "〈LOVE ATTACK〉이 기적의 역주행으로 '멜론 TOP100 1위'를 처음 찍었던 날짜(월/일)는? (숫자 4자리, 예: 0101)",
+          "answer": "0708",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 두 번째로 방문했던 대학 축제의 학교 이름은? (띄어쓰기 없이 한글 5글자)",
+          "answer": "서일대학교",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "테스트용 리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_e8a4117e-453a-4dab-8715-2daf31e7bbae",
+      "code": "ULHR2K",
+      "ownerHash": "e5eeaae3045adb69ccc572bd84cbca89e1ee80680a7238f454186bfe9a131ee0",
+      "createdAt": "2026-10-22T18:42:42.621Z",
+      "updatedAt": "2026-10-22T18:42:42.621Z"
+    },
+    {
+      "questions": [
+        {
+          "type": "SHORT",
+          "question": "리센느의 정식 데뷔일(월/일)은 언제일까요? (숫자 4자리, 예: 0101)",
+          "answer": "0326",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느는 한국인 멤버 3명과 일본인 멤버 2명으로 구성된 5인조 걸그룹이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느의 공식 팬덤 이름은 무엇일까요?",
+          "answer": "2",
+          "choices": [
+            "리센트",
+            "리마인",
+            "리멤버",
+            "샌드백"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "2026년 여름, 기적의 역주행으로 멜론 차트 1위와 인기가요 1위를 달성한 리센느의 대표곡 제목은? (띄어쓰기 없이 한글 4글자)",
+          "answer": "러브어택",
+          "choices": [
+            "UhUh",
+            "Pinball",
+            "Pretty Girl",
+            "Love Attack"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "MOVE",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느 멤버 중 최장신인 멤버는 '메이(MAY)'이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느 멤버들의 생년(출생연도)에 대한 설명 중 옳은 것은?",
+          "answer": "1",
+          "choices": [
+            "멤버 전원이 짝수 해에 태어났다",
+            "팀의 리더와 막내는 6살 차이다",
+            "팀에 1990년대생 멤버가 있다",
+            "멤버 전원이 동갑인 멤버가 있다"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느에게 '데뷔 첫 음악방송 1위' 트로피를 안겨준 곡과 프로그램은?",
+          "answer": "2",
+          "choices": [
+            "〈LOVE ATTACK〉 - SBS 《인기가요》",
+            "〈Pretty Girl〉 - SBS Life 《더 쇼》",
+            "〈Pretty Girl〉 - MBC 《쇼! 음악중심》",
+            "〈Bloom〉 - Mnet 《엠카운트다운》"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 프리 데뷔 선공개 싱글인 〈YoYo〉가 발매된 날은 4년에 한 번 오는 윤일인 '2월 29일'이었다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 최초로 '한터차트 기준 초동 10만 장'을 돌파했던 미니 3집의 앨범 이름은? (띄어쓰기 없이 한글 2글자)",
+          "answer": "립밤",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 정식 데뷔일로부터 정확히 '데뷔 200일'이 되던 날은 멤버 '리브'의 생일이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔한 날부터, 〈Pretty Girl〉로 감격의 데뷔 첫 음방 1위를 달성하기까지 걸린 일수는 총 며칠일까요? (숫자만 입력)",
+          "answer": "841",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "50% 확률로 부활하는 찬스타임!",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 5,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느가 지금까지 음악방송에서 받은 '1위 트로피'는 통산 총 몇 개일까요?",
+          "answer": "3",
+          "choices": [
+            "4",
+            "5",
+            "6",
+            "7"
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "〈LOVE ATTACK〉이 기적의 역주행으로 '멜론 TOP100 1위'를 처음 찍었던 날짜(월/일)는? (숫자 4자리, 예: 0101)",
+          "answer": "0708",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "리센느가 데뷔 후 두 번째로 방문했던 대학 축제의 학교 이름은? (띄어쓰기 없이 한글 5글자)",
+          "answer": "서일대학교",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 20,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "title": "테스트용 리센느 퀴즈",
+      "targetWinners": 1,
+      "id": "quiz_52e5812c-271e-47ce-b4a4-ab052b476b4e",
+      "code": "Q48CBG",
+      "ownerHash": "33a2dff5dbda20cd6445dd34445dde512a6436ee1ed766963db434abe993fa08",
+      "createdAt": "2026-10-23T03:04:45.155Z",
+      "updatedAt": "2026-10-23T03:04:45.155Z"
+    }
+  ],
+  "deletedQuizIds": [
+    "quiz_legacy_room_f323ca",
+    "quiz_37a7768e-0493-434d-b197-f252a53a1e0c",
+    "quiz_3fa29d59-adc4-48e9-a6ed-7cb623898724",
+    "quiz_ed4fddfa-ad9a-4851-9a72-baf0af00df98",
+    "quiz_854337de-0d9e-4df7-9f1d-2a3e2b11fb5d",
+    "quiz_caa6203a-2707-414c-8700-c68ebe656d83",
+    "quiz_e1d8383a-0a31-4f9f-8c5e-4a02d7f49ecd",
+    "quiz_aa02cedb-9136-460b-9c1a-a695e414deac",
+    "quiz_650c7b56-acb9-4d65-8641-a021439844d3",
+    "quiz_09112cfd-4ec3-41bb-a26b-97b3862f5bbe"
+  ],
+  "usedCodes": [
+    "MYX9LU",
+    "GV68YG",
+    "ZR7VXJ",
+    "VXCHV3",
+    "FATF6T",
+    "697KEU",
+    "LMX8A9",
+    "ULHR2K",
+    "Q48CBG"
+  ]
+}

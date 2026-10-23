@@ -56,6 +56,10 @@ async function copyQuizCode(code,button){
  catch{const selection=window.getSelection(),range=document.createRange();const label=button.closest('.my-quiz-row')?.querySelector('.quiz-code-label')||document.getElementById('saved-quiz-code-value');range.selectNodeContents(label);selection.removeAllRanges();selection.addRange(range);setQuizStatus('불러오기 코드: '+code+' · 선택한 코드를 복사해 주세요.');}
 }
 function resetCodeLoad(message=''){pendingCodeLoad=null;document.getElementById('btn-load-quiz-code').disabled=false;document.getElementById('quiz-code-message').textContent=message;}
+function quickLoadCode(code){
+  const input=document.getElementById('quiz-load-code');
+  if(input){input.value=code;loadQuizByCode();}
+}
 function loadQuizByCode(){
  if(!requireLibrary()||pendingCodeLoad)return;
  const input=document.getElementById('quiz-load-code'),code=input.value.trim().toUpperCase();input.value=code;

@@ -13,6 +13,31 @@ app.use(express.static(path.join(__dirname,'../client'),{etag:false,lastModified
 const disabled=process.env.OX_DISABLE_PERSISTENCE==='1';
 const oldFile=disabled?null:(process.env.OX_DATA_FILE||path.join(__dirname,'../data/rooms.json'));
 const quizFile=disabled?null:(process.env.OX_QUIZ_FILE||(process.env.OX_DATA_FILE?process.env.OX_DATA_FILE+'.quizzes.json':path.join(__dirname,'../data/quizzes.json')));
+
+const seedFile=path.join(__dirname,'../seeds/quizzes.json');
+if(quizFile&&fs.existsSync(seedFile)){
+ try{
+  fs.mkdirSync(path.dirname(quizFile),{recursive:true});
+  if(!fs.existsSync(quizFile)){
+   fs.copyFileSync(seedFile,quizFile);
+  }else{
+   const cur=JSON.parse(fs.readFileSync(quizFile,'utf8')||'{"quizzes":[]}');
+   const seed=JSON.parse(fs.readFileSync(seedFile,'utf8')||'{"quizzes":[]}');
+   const quizzes=Array.isArray(cur.quizzes)?cur.quizzes:[];
+   const ids=new Set(quizzes.map(q=>q.id));
+   const codes=new Set((cur.usedCodes||[]).concat(quizzes.map(q=>q.code)));
+   let added=false;
+   for(const sq of (seed.quizzes||[])){
+    if(!ids.has(sq.id)){quizzes.push(sq);ids.add(sq.id);if(sq.code)codes.add(sq.code);added=true;}
+   }
+   if(added){
+    cur.version=cur.version||1;cur.quizzes=quizzes;cur.usedCodes=Array.from(codes);
+    fs.writeFileSync(quizFile,JSON.stringify(cur,null,2),'utf8');
+   }
+  }
+ }catch(err){console.error('시드 동기화 실패:',err.message);}
+}
+
 const library=new QuizLibrary({file:quizFile,legacyRooms:new RoomStore(oldFile).load()});
 const roomManager=new RoomManager();
 const codeAttempts=new Map();

@@ -256,6 +256,11 @@
       <label for="quiz-load-code">코드로 불러오기</label>
       <div><input id="quiz-load-code" type="text" maxlength="6" placeholder="AB7K2M" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="quiz-code-help quiz-code-message"><button id="btn-load-quiz-code" class="btn btn-primary" type="submit">불러오기</button></div>
       <small id="quiz-code-help">같은 서버에서 발급한 6자리 코드를 입력하세요. 코드를 아는 사람은 문제와 정답을 불러올 수 있어요.</small>
+      <div class="preset-quiz-codes" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:8px;" onclick="quickLoadCode('VXCHV3')">⚡ 리센느 15제 (VXCHV3)</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:8px;" onclick="quickLoadCode('GV68YG')">⚡ 벽갤 리센느 6제 (GV68YG)</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:8px;" onclick="quickLoadCode('MYX9LU')">⚡ 파스텔 5제 (MYX9LU)</button>
+      </div>
       <p id="quiz-code-message" role="status"></p>
     </form>
     <p>내가 저장한 퀴즈</p>
