@@ -1909,3 +1909,107 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
     margin-bottom: 10px;
   }
 }
+
+/* 모바일 반응형 완벽 핏 & 줄바꿈/여백 정리 */
+@media (max-width: 680px) {
+  .overlay {
+    padding: 10px !important;
+  }
+  .lobby-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(100dvh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: 18px !important;
+  }
+  .lobby-header {
+    padding: 12px 14px !important;
+    gap: 10px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .lobby-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+  }
+  .lobby-title h1 {
+    font-size: 18px !important;
+    letter-spacing: -0.5px !important;
+    white-space: nowrap !important;
+  }
+  .lobby-title #btn-lobby-fullscreen {
+    margin-left: auto !important;
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    height: 30px !important;
+    flex-shrink: 0 !important;
+  }
+  .nickname-box {
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+  }
+  .nickname-box label {
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .nickname-box input {
+    min-width: 0 !important;
+    flex: 1 !important;
+    height: 38px !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+  }
+  #btn-avatar-picker {
+    font-size: 11.5px !important;
+    padding: 6px 9px !important;
+    height: 38px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .lobby-tip-strip {
+    padding: 8px 14px !important;
+    gap: 8px !important;
+    font-size: 11.5px !important;
+    line-height: 1.4 !important;
+  }
+  .tip-badge {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+  .lobby-tabs {
+    display: flex !important;
+    width: 100% !important;
+  }
+  .tab-btn {
+    flex: 1 !important;
+    min-height: 46px !important;
+    padding: 8px 4px !important;
+    font-size: 14px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+  .lobby-body {
+    padding: 14px 12px !important;
+  }
+  .empty-room-state {
+    padding: 24px 14px !important;
+  }
+  .empty-room-icon {
+    font-size: 32px !important;
+    margin-bottom: 8px !important;
+  }
+  .empty-room-state h3 {
+    font-size: 15px !important;
+  }
+  .empty-room-state p {
+    font-size: 12px !important;
+    margin-bottom: 14px !important;
+  }
+}
