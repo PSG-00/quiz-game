@@ -1815,20 +1815,60 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
   font-size: 13px;
   font-weight: 700;
 }
+.lobby-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
 .lobby-title #btn-lobby-fullscreen {
   font-size: 11px;
   font-weight: 700;
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 8px;
   background: #f4eee2;
   color: #52453c;
   border: 1px solid #dfd1bd;
   cursor: pointer;
   white-space: nowrap;
-  margin-left: 2px;
+  height: 28px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 .lobby-title #btn-lobby-fullscreen:hover {
   background: #ebdcc7;
+  color: #2e2621;
+}
+.btn-service-switch {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #fff0f7;
+  color: #b81f84;
+  border: 1.5px solid #f9c8e8;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  height: 28px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.btn-service-switch:hover {
+  background: #ffe4f3;
+  border-color: #f472b6;
+  color: #9d174d;
+  transform: translateY(-1px);
+}
+.btn-service-switch:active {
+  transform: scale(0.96);
 }
 
 /* 한국어 줄바꿈 최적화 (단어 쪼개짐 방지) & 세련된 툴바 */
@@ -1958,11 +1998,18 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }
-  .lobby-title #btn-lobby-fullscreen {
+  .lobby-title-actions {
     margin-left: auto !important;
-    font-size: 11px !important;
-    padding: 4px 8px !important;
-    height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex-shrink: 0 !important;
+  }
+  .lobby-title #btn-lobby-fullscreen,
+  .lobby-title .btn-service-switch {
+    font-size: 10.5px !important;
+    padding: 3px 7px !important;
+    height: 26px !important;
     flex-shrink: 0 !important;
   }
   .nickname-box {
