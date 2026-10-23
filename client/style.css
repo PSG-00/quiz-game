@@ -96,6 +96,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .nickname-box label {
@@ -1475,7 +1477,7 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 .avatar-option-name { display:block; }
 .avatar-picker-hint { margin:16px 0 0; color:#8e7f8d; font-size:12px; line-height:1.6; }
 @media(max-width:680px){
- #btn-avatar-picker { flex-basis:100%; }
+ #btn-avatar-picker { flex-basis:auto; flex-shrink:0; }
  #avatar-dialog { padding:16px; }
  .avatar-picker-content { grid-template-columns:minmax(0,1fr); gap:12px; }
  #avatar-options { max-height:35dvh; gap:10px; }
