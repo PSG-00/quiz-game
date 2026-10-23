@@ -37,26 +37,29 @@
 
       <!-- 상단 TIP 분리 배너 -->
       <div class="lobby-tip-strip">
-        <span class="tip-badge">TIP!</span>
-        <span class="tip-text">방에 입장하면 내 캐릭터 발밑에 <b>금빛 이중 링</b>과 머리 위 <b>'나'</b> 표식이 표시됩니다.</span>
+        <span class="tip-badge">TIP</span>
+        <span class="tip-text">방에 입장하면 발밑에 <b>금빛 이중 링</b>, 머리 위에 <b>'나' 표식</b>이 표시됩니다.</span>
       </div>
 
-      <div class="lobby-tabs-row">
-        <div class="lobby-tabs">
-          <button class="tab-btn active" id="tab-btn-list" onclick="switchLobbyTab('list')">
-            🚪 공개 방 목록 (바로 입장)
-          </button>
-          <button class="tab-btn" id="tab-btn-create" onclick="switchLobbyTab('create')">
-            🛠️ 방 만들기 &amp; 퀴즈 시나리오 출제
-          </button>
-        </div>
-        <div class="lobby-tab-actions">
-          <button id="btn-refresh-rooms" class="btn btn-ghost btn-sm" onclick="requestRoomList()" title="방 목록 새로고침">🔄 새로고침</button>
-        </div>
+      <div class="lobby-tabs">
+        <button class="tab-btn active" id="tab-btn-list" onclick="switchLobbyTab('list')">
+          방 목록
+        </button>
+        <button class="tab-btn" id="tab-btn-create" onclick="switchLobbyTab('create')">
+          방 만들기
+        </button>
       </div>
 
       <!-- 탭 1: 방 목록 -->
       <div class="lobby-body" id="tab-content-list">
+        <div class="room-list-toolbar">
+          <span class="room-list-headline">현재 참여 가능한 방</span>
+          <button id="btn-refresh-rooms" class="btn-icon-refresh" onclick="requestRoomList()" title="방 목록 새로고침" aria-label="방 목록 새로고침">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </button>
+        </div>
         <div id="room-action-notice" class="room-action-notice hidden" role="status"></div>
         <div id="room-list-grid" class="room-grid"></div>
       </div>
