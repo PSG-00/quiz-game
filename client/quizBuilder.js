@@ -48,7 +48,7 @@ function receiveSavedQuiz(msg){
  if(!pending||pending.generation!==editorGeneration)return;
  editingQuizId=msg.quiz.id;saveQuizDraft();
  renderSavedQuizCode(msg.quiz.code);
- setQuizStatus(pending.revision===draftRevision?(msg.unchanged?'✓ 변경된 내용이 없습니다. 이미 저장된 퀴즈입니다.':msg.created?'✓ 새 퀴즈로 저장했습니다.':'✓ 기존 퀴즈에 덮어썼습니다.'):'✓ 저장했습니다. 이후 수정한 내용은 다시 저장해 주세요.');
+ setQuizStatus(pending.revision===draftRevision?(msg.unchanged?'✓ 변경된 내용이 없습니다. 이미 저장된 퀴즈입니다.':msg.shared?'✓ 동일한 퀴즈가 이미 있어 기존 코드로 내 보관함에 연결했습니다.':msg.created?'✓ 새 퀴즈로 저장했습니다.':'✓ 기존 퀴즈에 덮어썼습니다.'):'✓ 저장했습니다. 이후 수정한 내용은 다시 저장해 주세요.');
 }
 function renderSavedQuizCode(code){document.getElementById('saved-quiz-code').classList.toggle('hidden',!code);document.getElementById('saved-quiz-code-value').textContent=code||'';}
 async function copyQuizCode(code,button){

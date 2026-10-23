@@ -64,8 +64,50 @@ function validatePlayable(questions){
   if(!q.question.trim()||(q.type!=='MINORITY'&&!q.answer.trim())||(q.type==='SHORT'&&!q.answer.split(',').some(a=>a.trim()))||(q.type==='MULTIPLE'&&q.choices.some(c=>!c.trim())))throw new Error(`문제 ${i+1}의 내용·정답·보기를 완성해 주세요. 임시 저장은 미완성 상태에서도 가능해요.`);
  }
 }
+function evictDuplicateOwner(targetOwnerHash,exceptClientId=null,targetRoom=null){
+ if(!targetOwnerHash)return false;
+ let wasHostInTarget=false,changed=false;
+ for(const r of roomManager.rooms.values()){
+  for(const [pid,p] of [...r.players.entries()]){
+   if(pid!==exceptClientId&&p.ownerHash===targetOwnerHash){
+    if(r===targetRoom&&r.hostId===pid)wasHostInTarget=true;
+    p.ws?.detachRoom?.();
+    r.removePlayer(pid);
+    try{p.ws?.terminate?.();}catch{}
+    if(r!==targetRoom&&r.players.size)r.broadcastRoomEvent();
+    changed=true;
+   }
+  }
+ }
+ if(changed)roomManager.cleanupEmptyRooms();
+ return wasHostInTarget;
+}
+function probeStaleOwnerSessions(targetOwnerHash,activeWs){
+ if(!targetOwnerHash)return;
+ for(const r of roomManager.rooms.values()){
+  for(const [,p] of r.players.entries()){
+   if(p.ownerHash===targetOwnerHash&&p.ws&&p.ws!==activeWs){
+    const oldWs=p.ws;
+    if(oldWs.readyState!==1){oldWs.leaveRoom?.();continue;}
+    oldWs.isAlive=false;
+    try{oldWs.ping();}catch{oldWs.leaveRoom?.();continue;}
+    const timer=setTimeout(()=>{if(oldWs.isAlive===false){oldWs.leaveRoom?.();try{oldWs.terminate();}catch{}}},1500);
+    timer.unref?.();
+   }
+  }
+ }
+}
+const heartbeatInterval=setInterval(()=>{
+ for(const peer of wss.clients){
+  if(peer.isAlive===false){peer.leaveRoom?.();try{peer.terminate();}catch{}continue;}
+  peer.isAlive=false;try{peer.ping();}catch{}
+ }
+},15000);
+heartbeatInterval.unref?.();
 wss.on('connection',ws=>{
  const clientId='user_'+crypto.randomBytes(6).toString('hex');let currentRoom=null,ownerHash=null;
+ ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;});
+ ws.detachRoom=()=>{currentRoom=null;};
  function listQuizzes(){send(ws,{type:'QUIZ_LIST',quizzes:library.list(ownerHash)});}
  function leave(){
   if(!currentRoom)return;
@@ -74,6 +116,7 @@ wss.on('connection',ws=>{
   if(room.players.size)room.broadcastRoomEvent();
   roomManager.cleanupEmptyRooms();publishRooms();
  }
+ ws.leaveRoom=leave;
  send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',raw=>{
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -81,7 +124,10 @@ wss.on('connection',ws=>{
    if(currentRoom&&roomManager.getRoom(currentRoom.id)!==currentRoom)currentRoom=null;
    switch(msg.type){
     case 'AUTH_LIBRARY':
-     ownerHash=userHash(msg.token);ws.libraryOwnerHash=ownerHash;library.claimLegacy(ownerHash,msg.legacyRoomTokens);listQuizzes();break;
+     ownerHash=userHash(msg.token);ws.libraryOwnerHash=ownerHash;
+     if(currentRoom){const me=currentRoom.players.get(clientId);if(me)me.ownerHash=ownerHash;}
+     probeStaleOwnerSessions(ownerHash,ws);
+     library.claimLegacy(ownerHash,msg.legacyRoomTokens);listQuizzes();break;
      case 'LIST_PUBLIC_QUIZZES':
       send(ws,{type:'PUBLIC_QUIZ_LIST',quizzes:library.listPublic()});break;
     case 'LIST_QUIZZES':
@@ -107,22 +153,24 @@ wss.on('connection',ws=>{
     case 'GET_ROOMS':send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
     case 'CREATE_ROOM': {
      if(!ownerHash)throw new Error('퀴즈 보관함 연결을 기다려 주세요.');
-     for(const room of roomManager.rooms.values())if(room!==currentRoom&&room.players.get(room.hostId)?.ownerHash===ownerHash)throw new Error('이미 운영 중인 방이 있어요. 해당 방에서 나간 뒤 새 방을 열어 주세요.');
      // Validate before saving or leaving the current room.
      const {parse}=require('../client/quizFiles');
      const draft=parse(JSON.stringify({version:1,title:msg.title,targetWinners:msg.targetWinners,restSeconds:msg.restSeconds,questions:msg.questions}));validatePlayable(draft.questions);
      leave();
+     evictDuplicateOwner(ownerHash,clientId);
      const room=roomManager.createRoom(draft,clientId);currentRoom=room;
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
      send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();publishRooms();break;
     }
     case 'JOIN_ROOM': {
      const room=roomManager.getRoom(msg.roomId);if(!room)throw new Error('이미 종료된 방입니다.');
+     const inheritedHost=evictDuplicateOwner(ownerHash,clientId,room);
      if(!room.players.has(clientId)&&room.players.size>=100)throw new Error('이 방은 최대 100명까지 입장할 수 있어요.');
      if(currentRoom===room){send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();break;}
      leave();currentRoom=room;
-     if(!room.hostId||!room.players.has(room.hostId))room.hostId=clientId;
+     if(inheritedHost||!room.hostId||!room.players.has(room.hostId))room.hostId=clientId;
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
+     if(inheritedHost)room.hostId=clientId;
      send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();publishRooms();break;
     }
     case 'LEAVE_ROOM':leave();send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
@@ -139,5 +187,6 @@ wss.on('connection',ws=>{
   }catch(error){console.error('퀴즈/방 처리 실패:',error.message);send(ws,{type:'ERROR',message:error.message||'처리하지 못했어요. 다시 시도해 주세요.',requestId:msg.requestId});}
  });
  ws.on('close',leave);
+ ws.on('error',leave);
 });
 server.listen(PORT,()=>console.log(`모두의 퀴즈: http://localhost:${PORT}`));

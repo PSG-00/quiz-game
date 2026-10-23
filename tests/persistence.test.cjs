@@ -21,4 +21,35 @@ test('같은 제목 같은 내용은 확인 없이 기존 저장 유지',()=>{co
 test('같은 제목 변경된 내용은 확인 전 보존하고 확인 후만 덮어쓰기',()=>{const lib=new QuizLibrary(),a=lib.saveByTitle('a',draft()).quiz,edit={...draft(),targetWinners:5};const check=lib.saveByTitle('a',edit);assert.equal(check.confirmation,true);assert.equal(lib.get('a',a.id).targetWinners,3);const result=lib.saveByTitle('a',{...edit,confirmOverwrite:true,expectedVersion:check.version});assert.equal(result.quiz.id,a.id);assert.equal(result.quiz.targetWinners,5);assert.equal(lib.list('a').length,1);});
 test('다른 퀴즈를 편집 중이어도 같은 제목이 이미 있으면 그 퀴즈 확인',()=>{const lib=new QuizLibrary(),a=lib.saveByTitle('a',draft()).quiz,b=lib.saveByTitle('a',{...draft(),title:'B'}).quiz;const edit={...draft(),quizId:b.id,targetWinners:4};const check=lib.saveByTitle('a',edit);const result=lib.saveByTitle('a',{...edit,confirmOverwrite:true,expectedVersion:check.version});assert.equal(result.quiz.id,a.id);assert.equal(lib.get('a',b.id).title,'B');});
 test('확인 대기 중 다른 탭에서 수정하면 재확인 없이 덮어쓰지 않음',()=>{const lib=new QuizLibrary(),a=lib.saveByTitle('a',draft()).quiz,edit={...draft(),targetWinners:5},check=lib.saveByTitle('a',edit);lib.save('a',{...draft(),quizId:a.id,targetWinners:7});const result=lib.saveByTitle('a',{...edit,confirmOverwrite:true,expectedVersion:check.version});assert.equal(result.confirmation,true);assert.notEqual(result.version,check.version);assert.equal(lib.get('a',a.id).targetWinners,7);});
-test('제목이 같아도 다른 사용자 퀴즈와는 별도 저장',()=>{const lib=new QuizLibrary(),a=lib.saveByTitle('a',draft()),b=lib.saveByTitle('b',draft());assert.notEqual(a.quiz.id,b.quiz.id);assert.equal(b.created,true);});
+test('제목이 같아도 내용이 다르면 다른 사용자 퀴즈와 별도 저장',()=>{const lib=new QuizLibrary(),a=lib.saveByTitle('a',draft()),b=lib.saveByTitle('b',{...draft(),questions:[{...draft().questions[0],answer:'부산'}]});assert.notEqual(a.quiz.id,b.quiz.id);assert.notEqual(a.quiz.code,b.quiz.code);assert.equal(b.created,true);});
+test('GC 구조: 동일 상태 퀴즈는 단일 코드로 참조 공유, 수정 시 Copy-on-Write 분기, 모든 참조 해제 시 삭제',()=>{
+  const lib=new QuizLibrary();
+  const a=lib.saveByTitle('a',draft());
+  const b=lib.saveByTitle('b',draft());
+  assert.equal(b.shared,true);
+  assert.equal(a.quiz.id,b.quiz.id);
+  assert.equal(a.quiz.code,b.quiz.code);
+  assert.equal(lib.quizzes.size,1);
+  // a와 b가 함께 참조 중일 때 a가 내용을 수정하면 Copy-on-Write로 분기되고 b의 코드는 그대로 유지
+  const editA={...draft(),questions:[{...draft().questions[0],answer:'부산'}]};
+  const checkA=lib.saveByTitle('a',editA);
+  assert.equal(checkA.confirmation,true);
+  const forkedA=lib.saveByTitle('a',{...editA,confirmOverwrite:true,expectedVersion:checkA.version});
+  assert.notEqual(forkedA.quiz.id,b.quiz.id);
+  assert.notEqual(forkedA.quiz.code,b.quiz.code);
+  assert.equal(lib.get('b',b.quiz.id).code,b.quiz.code);
+  assert.equal(lib.get('b',b.quiz.id).questions[0].answer,'서울, 서울특별시');
+  // c가 우연히 a와 똑같이 수정해서 저장하면 a의 코드로 자동 병합
+  const mergedC=lib.saveByTitle('c',editA);
+  assert.equal(mergedC.shared,true);
+  assert.equal(mergedC.quiz.code,forkedA.quiz.code);
+  assert.equal(lib.quizzes.size,2);
+  // 참조 카운팅 GC: a가 삭제해도 c가 참조 중이므로 유지, c까지 삭제하면 GC 수거
+  lib.delete('a',forkedA.quiz.id);
+  assert.equal(lib.list('a').length,0);
+  assert.equal(lib.getByCode(forkedA.quiz.code,'c').code,forkedA.quiz.code);
+  assert.equal(lib.quizzes.size,2);
+  lib.delete('c',forkedA.quiz.id);
+  assert.equal(lib.quizzes.size,1);
+  assert.throws(()=>lib.getByCode(forkedA.quiz.code,'c'));
+});
