@@ -73,7 +73,14 @@ function receiveLoadedQuiz(msg){
  }
  loadMyQuiz(msg.quiz,!!msg.byCode);
 }
-function openMyQuizzes(){if(!requireLibrary())return;if(!pendingCodeLoad)resetCodeLoad();document.getElementById('my-quizzes-dialog').showModal();ws.send(JSON.stringify({type:'LIST_QUIZZES'}));}
+function openMyQuizzes(tab = 'public') {
+  if(!requireLibrary()) return;
+  if(!pendingCodeLoad) resetCodeLoad();
+  document.getElementById('my-quizzes-dialog').showModal();
+  switchQuizLibraryTab(tab);
+  ws.send(JSON.stringify({ type: 'LIST_PUBLIC_QUIZZES' }));
+  ws.send(JSON.stringify({ type: 'LIST_QUIZZES' }));
+}
 function renderMyQuizzes(quizzes){
  libraryReady=true;savedQuizzes=quizzes;
  const list=document.getElementById('my-quizzes-list');list.replaceChildren();
@@ -233,17 +240,19 @@ function validateQuizDraft(){
   return true;
 }
 
-let allPublicQuizzes = [];
-function openPublicQuizzes(){
- if(!requireLibrary())return;
- const dialog = document.getElementById('public-quizzes-dialog');
- if(dialog){
-  const search = document.getElementById('public-quiz-search');
-  if(search) search.value = '';
-  dialog.showModal();
-  ws.send(JSON.stringify({type:'LIST_PUBLIC_QUIZZES'}));
- }
+function switchQuizLibraryTab(tab) {
+  const isPublic = tab === 'public';
+  document.getElementById('tab-btn-quiz-public')?.classList.toggle('active', isPublic);
+  document.getElementById('tab-btn-quiz-mine')?.classList.toggle('active', !isPublic);
+  document.getElementById('tab-quiz-content-public')?.classList.toggle('hidden', !isPublic);
+  document.getElementById('tab-quiz-content-mine')?.classList.toggle('hidden', isPublic);
+  if (isPublic) {
+    const search = document.getElementById('public-quiz-search');
+    filterPublicQuizzes(search?.value || '');
+  }
 }
+
+let allPublicQuizzes = [];
 function renderPublicQuizzes(quizzes){
  allPublicQuizzes = quizzes || [];
  filterPublicQuizzes(document.getElementById('public-quiz-search')?.value || '');
