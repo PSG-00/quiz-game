@@ -135,7 +135,7 @@ class QuizLibrary {
       const quiz=[...this.quizzes.values()].find(q=>q.code===code);
       if(!quiz)throw new Error('저장된 퀴즈를 찾지 못했어요. 코드를 확인해 주세요.');
       const imported=quiz.ownerHash!==ownerHash;
-      return {...this.get(quiz.ownerHash,quiz.id),id:imported?null:quiz.id,imported};
+      return {id:imported?null:quiz.id,code:quiz.code,title:quiz.title,targetWinners:quiz.targetWinners,restSeconds:quiz.restSeconds??10,questions:JSON.parse(JSON.stringify(quiz.questions)),imported};
     });
   }
   delete(ownerHash,id){
@@ -150,11 +150,12 @@ class QuizLibrary {
     return this.withStorage(()=>this.saveByTitleInside(ownerHash,options));
   }
   saveByTitleInside(ownerHash,options){
-    if(options.quizId)this.get(ownerHash,options.quizId);
+    let quizId=options.quizId;
+    if(quizId){const target=this.quizzes.get(quizId);if(!target||target.ownerHash!==ownerHash)quizId=null;}
     const normalize=(input,allowLegacyLengths=false)=>parse(JSON.stringify({version:1,title:(input.title??'').trim(),targetWinners:input.targetWinners??2,restSeconds:input.restSeconds===undefined?10:input.restSeconds,questions:input.questions}),{allowLegacyLengths});
     const data=normalize(options);
     const candidates=[...this.quizzes.values()].filter(q=>q.ownerHash===ownerHash&&q.title.trim()===data.title).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-    const previous=candidates.find(q=>q.id===options.quizId)||candidates[0];
+    const previous=(quizId&&candidates.find(q=>q.id===quizId))||candidates[0];
     if(!previous)return {quiz:this.save(ownerHash,{...data,quizId:null}),created:true};
     const before=normalize(previous,true);
     if(JSON.stringify(before)===JSON.stringify(data))return {quiz:this.get(ownerHash,previous.id),unchanged:true};
