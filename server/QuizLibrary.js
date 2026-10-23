@@ -106,6 +106,27 @@ class QuizLibrary {
     if(claimed.length)try{this.persist();}catch(error){for(const quiz of claimed)quiz.ownerHash=null;throw error;}
   }
   list(ownerHash){return this.withStorage(()=>[...this.quizzes.values()].filter(q=>q.ownerHash===ownerHash).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>({id:q.id,code:q.code,title:q.title,questionCount:q.questions.length,targetWinners:q.targetWinners,updatedAt:q.updatedAt})));}
+  listPublic(){
+    return this.withStorage(()=>{
+      const seen=new Set();
+      const list=[];
+      for(const q of [...this.quizzes.values()].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))){
+        const key=`${q.title}::${q.questions?.length||0}`;
+        if(seen.has(key))continue;
+        seen.add(key);
+        list.push({
+          id:q.id,
+          code:q.code,
+          title:q.title||'제목 없는 퀴즈',
+          questionCount:q.questions?.length||0,
+          targetWinners:q.targetWinners??2,
+          restSeconds:q.restSeconds??10,
+          updatedAt:q.updatedAt
+        });
+      }
+      return list;
+    });
+  }
   get(ownerHash,id){return this.withStorage(()=>{const q=this.quizzes.get(id);if(!q||q.ownerHash!==ownerHash)throw new Error('내가 저장한 퀴즈만 불러올 수 있어요.');return {id:q.id,code:q.code,title:q.title,targetWinners:q.targetWinners,restSeconds:q.restSeconds??10,questions:JSON.parse(JSON.stringify(q.questions))};});}
   getByCode(value,ownerHash){
     return this.withStorage(()=>{

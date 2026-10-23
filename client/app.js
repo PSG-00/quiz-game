@@ -859,6 +859,7 @@ function connectWebSocket() {
       }
 
       case 'QUIZ_LIST':renderMyQuizzes(msg.quizzes||[]);break;
+      case 'PUBLIC_QUIZ_LIST':renderPublicQuizzes(msg.quizzes||[]);break;
       case 'QUIZ_SAVED':receiveSavedQuiz(msg);break;
       case 'QUIZ_SAVE_CONFIRM':receiveSaveConfirmation(msg);break;
       case 'QUIZ_LOADED':receiveLoadedQuiz(msg);break;

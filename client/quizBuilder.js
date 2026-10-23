@@ -56,9 +56,6 @@ async function copyQuizCode(code,button){
  catch{const selection=window.getSelection(),range=document.createRange();const label=button.closest('.my-quiz-row')?.querySelector('.quiz-code-label')||document.getElementById('saved-quiz-code-value');range.selectNodeContents(label);selection.removeAllRanges();selection.addRange(range);setQuizStatus('불러오기 코드: '+code+' · 선택한 코드를 복사해 주세요.');}
 }
 function resetCodeLoad(message=''){pendingCodeLoad=null;document.getElementById('btn-load-quiz-code').disabled=false;document.getElementById('quiz-code-message').textContent=message;}
-function quickLoadCode(code){
-  const input=document.getElementById('quiz-load-code');
-  if(input){input.value=code;loadQuizByCode();}
 }
 function loadQuizByCode(){
  if(!requireLibrary()||pendingCodeLoad)return;
@@ -73,7 +70,7 @@ function receiveLoadedQuiz(msg){
   const pending=pendingCodeLoad;
   if(!pending||pending.requestId!==msg.requestId)return;
   resetCodeLoad();
-  if(pending.generation!==editorGeneration||!document.getElementById('my-quizzes-dialog').open)return;
+  if(pending.generation!==editorGeneration)return;
  }
  loadMyQuiz(msg.quiz,!!msg.byCode);
 }
@@ -118,7 +115,8 @@ function loadMyQuiz(quiz,byCode=false){
  document.getElementById('create-rest-seconds').value=quiz.restSeconds??10;
  document.getElementById('builder-validation').classList.add('hidden');
  renderSavedQuizCode(quiz.id?quiz.code:null);
- commitQuizStructure();setQuizStatus(byCode&&quiz.imported?'✓ 코드 '+quiz.code+'로 불러왔습니다. 퀴즈 저장을 누르면 내 보관함에 별도로 저장돼요.':'✓ 저장한 퀴즈를 불러왔습니다.');document.getElementById('my-quizzes-dialog').close();
+ commitQuizStructure();setQuizStatus(byCode&&quiz.imported?'✓ 코드 '+quiz.code+'로 불러왔습니다. 퀴즈 저장을 누르면 내 보관함에 별도로 저장돼요.':'✓ 저장한 퀴즈를 불러왔습니다.');if(document.getElementById('my-quizzes-dialog')?.open)document.getElementById('my-quizzes-dialog').close();
+ if(document.getElementById('public-quizzes-dialog')?.open)document.getElementById('public-quizzes-dialog').close();
 }
 function newLibraryQuiz(){rememberQuizEdit();editorGeneration++;editingQuizId=null;renderSavedQuizCode(null);builderQuestions=[newQuizStep()];activeQuizIndex=0;document.getElementById('create-room-title').value='';document.getElementById('create-target-winners').value='2';document.getElementById('create-rest-seconds').value='10';commitQuizStructure();document.getElementById('my-quizzes-dialog').close();setQuizStatus('새 퀴즈를 작성하고 저장해 주세요.');}
 function newQuizStep(isRevival = false) {
@@ -234,4 +232,72 @@ function validateQuizDraft(){
     if(error){showBuilderError(error,i);return false;}
   }
   return true;
+}
+
+let allPublicQuizzes = [];
+function openPublicQuizzes(){
+ if(!requireLibrary())return;
+ const dialog = document.getElementById('public-quizzes-dialog');
+ if(dialog){
+  const search = document.getElementById('public-quiz-search');
+  if(search) search.value = '';
+  dialog.showModal();
+  ws.send(JSON.stringify({type:'LIST_PUBLIC_QUIZZES'}));
+ }
+}
+function renderPublicQuizzes(quizzes){
+ allPublicQuizzes = quizzes || [];
+ filterPublicQuizzes(document.getElementById('public-quiz-search')?.value || '');
+}
+function filterPublicQuizzes(query){
+ const list = document.getElementById('public-quizzes-list');
+ if(!list) return;
+ list.replaceChildren();
+ const q = (query || '').trim().toLowerCase();
+ const filtered = q ? allPublicQuizzes.filter(quiz => (quiz.title || '').toLowerCase().includes(q)) : allPublicQuizzes;
+ if(!filtered.length){
+  const empty = document.createElement('p');
+  empty.style.cssText = 'color:#8c7e8d; text-align:center; padding:20px 0; font-size:13px;';
+  empty.textContent = q ? '검색 결과와 일치하는 퀴즈가 없어요.' : '등록된 공개 퀴즈가 아직 없습니다.';
+  list.append(empty);
+  return;
+ }
+ for(const quiz of filtered){
+  const row = document.createElement('div');
+  row.className = 'my-quiz-row';
+  const info = document.createElement('div');
+  const title = document.createElement('strong');
+  title.textContent = quiz.title || '제목 없는 퀴즈';
+  const meta = document.createElement('small');
+  meta.textContent = quiz.questionCount + '문제 · 당첨 목표 ' + quiz.targetWinners + '명 · 쉬는시간 ' + (quiz.restSeconds ?? 10) + '초';
+  info.append(title, meta);
+  if(quiz.code){
+   const codeRow = document.createElement('div');
+   codeRow.className = 'quiz-code-row';
+   const code = document.createElement('strong');
+   code.className = 'quiz-code-label';
+   code.textContent = quiz.code;
+   const copy = document.createElement('button');
+   copy.type = 'button';
+   copy.className = 'quiz-code-copy';
+   copy.textContent = '코드 복사';
+   copy.onclick = () => copyQuizCode(quiz.code, copy);
+   codeRow.append(code, copy);
+   info.append(codeRow);
+  }
+  const actions = document.createElement('div');
+  actions.className = 'my-quiz-row-actions';
+  const load = document.createElement('button');
+  load.className = 'btn btn-primary';
+  load.textContent = '불러오기';
+  load.onclick = () => {
+   if(!requireLibrary()||pendingCodeLoad)return;
+   const requestId='load_code_'+(++saveSequence);
+   pendingCodeLoad={requestId,generation:editorGeneration};
+   ws.send(JSON.stringify({type:'LOAD_QUIZ_BY_CODE',code:quiz.code,requestId}));
+  };
+  actions.append(load);
+  row.append(info, actions);
+  list.append(row);
+ }
 }

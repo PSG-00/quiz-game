@@ -82,6 +82,8 @@ wss.on('connection',ws=>{
    switch(msg.type){
     case 'AUTH_LIBRARY':
      ownerHash=userHash(msg.token);ws.libraryOwnerHash=ownerHash;library.claimLegacy(ownerHash,msg.legacyRoomTokens);listQuizzes();break;
+     case 'LIST_PUBLIC_QUIZZES':
+      send(ws,{type:'PUBLIC_QUIZ_LIST',quizzes:library.listPublic()});break;
     case 'LIST_QUIZZES':
      if(!ownerHash)throw new Error('퀴즈 보관함에 연결 중입니다. 잠시 후 다시 눌러 주세요.');
      listQuizzes();break;
