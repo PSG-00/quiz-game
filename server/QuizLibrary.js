@@ -120,14 +120,14 @@ class QuizLibrary {
           title:q.title||'제목 없는 퀴즈',
           questionCount:q.questions?.length||0,
           targetWinners:q.targetWinners??2,
-          restSeconds:q.restSeconds??10,
+          restSeconds:q.restSeconds??5,
           updatedAt:q.updatedAt
         });
       }
       return list;
     });
   }
-  get(ownerHash,id){return this.withStorage(()=>{const q=this.quizzes.get(id);if(!q||q.ownerHash!==ownerHash)throw new Error('내가 저장한 퀴즈만 불러올 수 있어요.');return {id:q.id,code:q.code,title:q.title,targetWinners:q.targetWinners,restSeconds:q.restSeconds??10,questions:JSON.parse(JSON.stringify(q.questions))};});}
+  get(ownerHash,id){return this.withStorage(()=>{const q=this.quizzes.get(id);if(!q||q.ownerHash!==ownerHash)throw new Error('내가 저장한 퀴즈만 불러올 수 있어요.');return {id:q.id,code:q.code,title:q.title,targetWinners:q.targetWinners,restSeconds:q.restSeconds??5,questions:JSON.parse(JSON.stringify(q.questions))};});}
   getByCode(value,ownerHash){
     return this.withStorage(()=>{
       const code=typeof value==='string'?value.trim().toUpperCase():'';
@@ -135,7 +135,7 @@ class QuizLibrary {
       const quiz=[...this.quizzes.values()].find(q=>q.code===code);
       if(!quiz)throw new Error('저장된 퀴즈를 찾지 못했어요. 코드를 확인해 주세요.');
       const imported=quiz.ownerHash!==ownerHash;
-      return {id:imported?null:quiz.id,code:quiz.code,title:quiz.title,targetWinners:quiz.targetWinners,restSeconds:quiz.restSeconds??10,questions:JSON.parse(JSON.stringify(quiz.questions)),imported};
+      return {id:imported?null:quiz.id,code:quiz.code,title:quiz.title,targetWinners:quiz.targetWinners,restSeconds:quiz.restSeconds??5,questions:JSON.parse(JSON.stringify(quiz.questions)),imported};
     });
   }
   delete(ownerHash,id){
@@ -152,7 +152,7 @@ class QuizLibrary {
   saveByTitleInside(ownerHash,options){
     let quizId=options.quizId;
     if(quizId){const target=this.quizzes.get(quizId);if(!target||target.ownerHash!==ownerHash)quizId=null;}
-    const normalize=(input,allowLegacyLengths=false)=>parse(JSON.stringify({version:1,title:(input.title??'').trim(),targetWinners:input.targetWinners??2,restSeconds:input.restSeconds===undefined?10:input.restSeconds,questions:input.questions}),{allowLegacyLengths});
+    const normalize=(input,allowLegacyLengths=false)=>parse(JSON.stringify({version:1,title:(input.title??'').trim(),targetWinners:input.targetWinners??2,restSeconds:input.restSeconds===undefined?5:input.restSeconds,questions:input.questions}),{allowLegacyLengths});
     const data=normalize(options);
     const candidates=[...this.quizzes.values()].filter(q=>q.ownerHash===ownerHash&&q.title.trim()===data.title).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     const previous=(quizId&&candidates.find(q=>q.id===quizId))||candidates[0];
@@ -169,7 +169,7 @@ class QuizLibrary {
   saveInside(ownerHash,options){
     const previous=options.quizId?this.quizzes.get(options.quizId):null;
     if(options.quizId&&(!previous||previous.ownerHash!==ownerHash))throw new Error('이 퀴즈를 수정할 권한이 없어요.');
-    const data=parse(JSON.stringify({version:1,title:options.title??'',targetWinners:options.targetWinners??2,restSeconds:options.restSeconds===undefined?10:options.restSeconds,questions:options.questions}));
+    const data=parse(JSON.stringify({version:1,title:options.title??'',targetWinners:options.targetWinners??2,restSeconds:options.restSeconds===undefined?5:options.restSeconds,questions:options.questions}));
     const id=previous?.id||'quiz_'+crypto.randomUUID();
     const code=previous?.code||this.generateCode();this.usedCodes.add(code);
     const record={...previous,...data,id,code,ownerHash,createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};

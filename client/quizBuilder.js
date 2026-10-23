@@ -118,13 +118,13 @@ function loadMyQuiz(quiz,byCode=false){
  rememberQuizEdit();editorGeneration++;editingQuizId=quiz.id||null;builderQuestions=quiz.questions;activeQuizIndex=0;
  document.getElementById('create-room-title').value=quiz.title;
  document.getElementById('create-target-winners').value=quiz.targetWinners;
- document.getElementById('create-rest-seconds').value=quiz.restSeconds??10;
+ document.getElementById('create-rest-seconds').value=quiz.restSeconds??5;
  document.getElementById('builder-validation').classList.add('hidden');
  renderSavedQuizCode(quiz.id?quiz.code:null);
  commitQuizStructure();setQuizStatus(byCode&&quiz.imported?'✓ 코드 '+quiz.code+'로 불러왔습니다. 퀴즈 저장을 누르면 내 보관함에 별도로 저장돼요.':'✓ 저장한 퀴즈를 불러왔습니다.');if(document.getElementById('my-quizzes-dialog')?.open)document.getElementById('my-quizzes-dialog').close();
  if(document.getElementById('public-quizzes-dialog')?.open)document.getElementById('public-quizzes-dialog').close();
 }
-function newLibraryQuiz(){rememberQuizEdit();editorGeneration++;editingQuizId=null;renderSavedQuizCode(null);builderQuestions=[newQuizStep()];activeQuizIndex=0;document.getElementById('create-room-title').value='';document.getElementById('create-target-winners').value='2';document.getElementById('create-rest-seconds').value='10';commitQuizStructure();document.getElementById('my-quizzes-dialog').close();setQuizStatus('새 퀴즈를 작성하고 저장해 주세요.');}
+function newLibraryQuiz(){rememberQuizEdit();editorGeneration++;editingQuizId=null;renderSavedQuizCode(null);builderQuestions=[newQuizStep()];activeQuizIndex=0;document.getElementById('create-room-title').value='';document.getElementById('create-target-winners').value='2';document.getElementById('create-rest-seconds').value='5';commitQuizStructure();document.getElementById('my-quizzes-dialog').close();setQuizStatus('새 퀴즈를 작성하고 저장해 주세요.');}
 function newQuizStep(isRevival = false) {
   return {type:'OX',isRevival,question:'',answer:'O',choices:['','','',''],inputMode:'BUTTON',timeLimit:12};
 }
@@ -277,7 +277,7 @@ function filterPublicQuizzes(query){
   const title = document.createElement('strong');
   title.textContent = quiz.title || '제목 없는 퀴즈';
   const meta = document.createElement('small');
-  meta.textContent = quiz.questionCount + '문제 · 당첨 목표 ' + quiz.targetWinners + '명 · 쉬는시간 ' + (quiz.restSeconds ?? 10) + '초';
+  meta.textContent = quiz.questionCount + '문제 · 당첨 목표 ' + quiz.targetWinners + '명 · 쉬는시간 ' + (quiz.restSeconds ?? 5) + '초';
   info.append(title, meta);
   if(quiz.code){
    const codeRow = document.createElement('div');

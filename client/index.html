@@ -4,8 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>모두의 퀴즈 · 실시간 멀티플레이</title>
-  <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="./style.css?v=25" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#fdfaf3" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
+  <link rel="stylesheet" href="./style.css?v=26" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -63,7 +70,7 @@
         <div class="quiz-settings-visible">
           <label for="create-room-title">퀴즈 제목<input type="text" id="create-room-title" value="" maxlength="40" placeholder="퀴즈 제목을 입력하세요"></label>
           <label for="create-target-winners">당첨 목표 인원 (명)<input type="number" id="create-target-winners" value="2" min="1" max="100"></label>
-          <label for="create-rest-seconds">문제 사이 쉬는 시간 (초)<input type="number" id="create-rest-seconds" value="10" min="0" max="60" step="1"><small>기본 10초 · 0초면 바로 다음 문제</small></label>
+          <label for="create-rest-seconds">문제 사이 쉬는 시간 (초)<input type="number" id="create-rest-seconds" value="5" min="0" max="60" step="1"><small>기본 5초 · 0초면 바로 다음 문제</small></label>
         </div>
         <div class="quiz-builder-header builder-toolbar">
           <div><h3>퀴즈 만들기 <span id="builder-count"></span></h3><p id="builder-save-status" aria-live="polite">작성 중 내용은 이 브라우저에도 자동 보관돼요</p></div>
@@ -140,6 +147,7 @@
         <div class="quiz-action-tools">
           <button onclick="focusMyCharacter()">◎ 나 찾기</button>
           <button class="rules-link" onclick="document.getElementById('rules-dialog').showModal()">게임 규칙</button>
+          <button id="btn-fullscreen" type="button" onclick="toggleFullScreen()" title="전체화면 전환">⛶ 전체화면</button>
         </div>
       </div>
       <!-- 패자부활전 중 우측에 뜨는 역할 교대 배지 (시안 04번) -->
@@ -324,5 +332,19 @@
   <script src="./quizBuilder.js?v=16"></script>
   <script src="./resultNotifications.js?v=1"></script>
   <script src="./app.js?v=39"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  </script>
 </body>
 </html>

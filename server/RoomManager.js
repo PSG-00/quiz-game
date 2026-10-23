@@ -81,7 +81,7 @@ class Room {
     this.createdAt = options.createdAt || new Date().toISOString();
     this.isDemo = false;
     this.targetWinners = clamp(parseInt(options.targetWinners, 10) || 2, 1, 100);
-    this.restSeconds=Number.isInteger(options.restSeconds)?clamp(options.restSeconds,0,60):10;
+    this.restSeconds=Number.isInteger(options.restSeconds)?clamp(options.restSeconds,0,60):5;
     this.zeroSurvivorPolicy = 'PREVIOUS_SURVIVORS'; // 전원 오답이면 직전 생존자를 기준으로 종료·추첨
 
     this.questions = Array.isArray(options.questions) && options.questions.length > 0
