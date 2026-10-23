@@ -1403,9 +1403,17 @@ function renderRoomList(rooms) {
   grid.innerHTML = '';
 
   if (rooms.length === 0) {
-    grid.innerHTML = `<p style="color:#64748b;">현재 생성된 방이 없습니다. 상단 [방 만들기] 탭에서 새 방을 만들어보세요!</p>`;
+    grid.className = 'room-grid empty-grid';
+    grid.innerHTML = `
+      <div class="empty-room-state">
+        <div class="empty-room-icon">📭</div>
+        <h3>현재 열려있는 공개 방이 없습니다</h3>
+        <p>상단 <b>[🛠️ 방 만들기 &amp; 퀴즈 시나리오 출제]</b> 탭에서 첫 번째 방을 만들어 보세요!</p>
+        <button class="btn btn-primary btn-sm" type="button" onclick="switchLobbyTab('create')">＋ 지금 방 만들기</button>
+      </div>`;
     return;
   }
+  grid.className = 'room-grid';
 
   for (const r of rooms) {
     const card = document.createElement('div');
