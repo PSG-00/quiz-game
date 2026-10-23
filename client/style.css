@@ -1680,3 +1680,70 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 
 #btn-fullscreen { font-size:10px; padding:0 7px; border-radius:6px; background:#f4eee2; color:#52453c; border:1px solid #dfd1bd; cursor:pointer; }
 #btn-fullscreen:hover { background:#ebdcc7; }
+
+/* 상단 TIP 분리 배너 */
+.lobby-tip-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: #fff8eb;
+  border-bottom: 1.5px solid #ebdcc7;
+  font-size: 13px;
+  color: #5c4f44;
+}
+.tip-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.tip-text {
+  line-height: 1.45;
+}
+.tip-text b {
+  color: #854d0e;
+}
+.lobby-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f5efe2;
+  border-bottom: 1.5px solid #e5dac4;
+  padding-right: 14px;
+}
+.lobby-tabs-row .lobby-tabs {
+  flex: 1;
+  border-bottom: none;
+}
+.lobby-tab-actions {
+  flex-shrink: 0;
+}
+#btn-lobby-fullscreen {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: #f4eee2;
+  color: #52453c;
+  border: 1px solid #dfd1bd;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#btn-lobby-fullscreen:hover {
+  background: #ebdcc7;
+}
+@media (max-width: 680px) {
+  .lobby-tip-strip {
+    padding: 8px 14px;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .lobby-tabs-row {
+    padding-right: 8px;
+  }
+}

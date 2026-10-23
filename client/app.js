@@ -1387,6 +1387,9 @@ window.switchLobbyTab = function (tab) {
   document.getElementById('tab-btn-create').classList.toggle('active', !isList);
   document.getElementById('tab-content-list').classList.toggle('hidden', !isList);
   document.getElementById('tab-content-create').classList.toggle('hidden', isList);
+  const refreshBtn = document.getElementById('btn-refresh-rooms');
+  if (refreshBtn) refreshBtn.classList.toggle('hidden', !isList);
+  if (isList) requestRoomList();
 };
 
 window.requestRoomList = function () {
