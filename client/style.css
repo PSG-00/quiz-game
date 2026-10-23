@@ -1730,20 +1730,6 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 .lobby-tab-actions {
   flex-shrink: 0;
 }
-#btn-lobby-fullscreen {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 9px;
-  background: #f4eee2;
-  color: #52453c;
-  border: 1px solid #dfd1bd;
-  cursor: pointer;
-  white-space: nowrap;
-}
-#btn-lobby-fullscreen:hover {
-  background: #ebdcc7;
-}
 @media (max-width: 680px) {
   .lobby-tip-strip {
     padding: 8px 14px;
@@ -1822,53 +1808,48 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
   flex-shrink: 0;
   margin-left: 4px;
 }
-.lobby-title #btn-lobby-fullscreen {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 9px;
-  border-radius: 8px;
-  background: #f4eee2;
-  color: #52453c;
-  border: 1px solid #dfd1bd;
+.lobby-action-pill {
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  box-sizing: border-box !important;
+  padding: 0 11px !important;
+  font-family: inherit;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+  line-height: 25px !important;
+  border-radius: 999px !important;
+  border: 1.5px solid #ded3c1 !important;
+  background: #f5eee3;
+  color: #55483f;
   cursor: pointer;
-  white-space: nowrap;
-  height: 28px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
   transition: all 0.15s ease;
 }
-.lobby-title #btn-lobby-fullscreen:hover {
-  background: #ebdcc7;
+.lobby-action-pill:hover {
+  background: #e8dccb;
+  border-color: #cbbeaa !important;
   color: #2e2621;
-}
-.btn-service-switch {
-  font-size: 11px;
-  font-weight: 800;
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: #fff0f7;
-  color: #b81f84;
-  border: 1.5px solid #f9c8e8;
-  cursor: pointer;
-  white-space: nowrap;
-  text-decoration: none;
-  height: 28px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-}
-.btn-service-switch:hover {
-  background: #ffe4f3;
-  border-color: #f472b6;
-  color: #9d174d;
   transform: translateY(-1px);
 }
-.btn-service-switch:active {
+.lobby-action-pill:active {
   transform: scale(0.96);
+}
+.lobby-action-pill.pill-formlimpic {
+  background: #fff0f7 !important;
+  color: #b81f84 !important;
+  border: 1.5px solid #f9c8e8 !important;
+}
+.lobby-action-pill.pill-formlimpic:hover {
+  background: #ffe4f3 !important;
+  border-color: #f472b6 !important;
+  color: #9d174d !important;
+  transform: translateY(-1px);
 }
 
 /* 한국어 줄바꿈 최적화 (단어 쪼개짐 방지) & 세련된 툴바 */
@@ -2005,11 +1986,13 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
     gap: 4px !important;
     flex-shrink: 0 !important;
   }
-  .lobby-title #btn-lobby-fullscreen,
-  .lobby-title .btn-service-switch {
+  .lobby-action-pill {
     font-size: 10.5px !important;
-    padding: 3px 7px !important;
+    padding: 0 8px !important;
     height: 26px !important;
+    min-height: 26px !important;
+    max-height: 26px !important;
+    line-height: 23px !important;
     flex-shrink: 0 !important;
   }
   .nickname-box {
