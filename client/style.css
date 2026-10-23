@@ -1875,18 +1875,20 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.25s ease, background 0.15s, border-color 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   flex-shrink: 0;
   padding: 0;
 }
 .btn-icon-refresh:hover {
-  background: #f4eee2;
+  background: #ede2d1;
   border-color: #baa891;
-  color: #1e293b;
-  transform: rotate(60deg);
+  color: #2c221c;
 }
 .btn-icon-refresh:active {
-  transform: rotate(180deg) scale(0.92);
+  background: #dfcfb8;
+  border-color: #9c8973;
+  color: #1a120e;
+  transform: scale(0.95);
 }
 .btn, button {
   white-space: nowrap;
