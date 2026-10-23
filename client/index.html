@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>OX 퀴즈쇼 · 모두의 퀴즈 무대</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./style.css?v=25" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- 3D / 2.5D 파스텔 스튜디오 캔버스 -->
+  <div id="canvas-container"><div id="host-speech-bubble" class="host-speech-bubble" role="status" aria-label="사회자 안내">준비되면 게임을 시작해 주세요!</div></div>
+
+  <!-- ==================== 1. 로비 & 방 만들기 오버레이 ==================== -->
+  <div id="lobby-overlay" class="overlay">
+    <div class="lobby-card">
+      <div class="lobby-header">
+        <div class="lobby-title">
+          <span class="pixel-badge">QUIZ TOGETHER</span>
+          <h1>모두의 OX 퀴즈쇼</h1>
+        </div>
+        <div class="nickname-box">
+          <label for="nickname-input">내 닉네임</label>
+          <input type="text" id="nickname-input" maxlength="12" placeholder="닉네임 입력" autocomplete="off" />
+          <button id="btn-avatar-picker" type="button" onclick="AvatarPicker.open()"><span id="selected-avatar-name">기본</span> · 아바타 선택</button>
+        </div>
+      </div>
+
+      <div class="lobby-tabs">
+        <button class="tab-btn active" id="tab-btn-list" onclick="switchLobbyTab('list')">
+          🚪 공개 방 목록 (바로 입장)
+        </button>
+        <button class="tab-btn" id="tab-btn-create" onclick="switchLobbyTab('create')">
+          🛠️ 방 만들기 & 퀴즈 시나리오 출제
+        </button>
+      </div>
+
+      <!-- 탭 1: 방 목록 -->
+      <div class="lobby-body" id="tab-content-list">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <p style="font-size:13px; color:#64748b;">
+            💡 방에 입장하면 내 캐릭터 발밑에 <b>금빛 이중 링</b>과 머리 위 <b>'나'</b> 표식이 표시됩니다.
+          </p>
+          <button class="btn btn-ghost btn-sm" onclick="requestRoomList()">🔄 새로고침</button>
+        </div>
+        <div id="room-action-notice" class="room-action-notice hidden" role="status"></div>
+        <div id="room-list-grid" class="room-grid"></div>
+      </div>
+
+      <!-- 탭 2: 방 만들기 -->
+      <div class="lobby-body hidden" id="tab-content-create">
+        <div class="quiz-library-actions">
+          <button id="btn-save-quiz" class="btn btn-primary" onclick="saveMyQuiz()">퀴즈 저장</button>
+          <button class="btn btn-ghost" onclick="openMyQuizzes()">퀴즈 불러오기</button>
+        </div>
+        <p id="my-quiz-status" class="my-quiz-status" role="status">작성한 퀴즈를 서버에 임시 저장할 수 있어요.</p>
+        <div id="saved-quiz-code" class="saved-quiz-code hidden">
+          <span>저장한 퀴즈 코드</span><strong id="saved-quiz-code-value"></strong>
+          <button type="button" class="btn btn-ghost" onclick="copyQuizCode(document.getElementById('saved-quiz-code-value').textContent,this)">코드 복사</button>
+          <small>다른 브라우저에서도 이 코드로 불러올 수 있어요.</small>
+        </div>
+        <div class="quiz-settings-visible">
+          <label for="create-room-title">퀴즈 제목<input type="text" id="create-room-title" value="" maxlength="40" placeholder="퀴즈 제목을 입력하세요"></label>
+          <label for="create-target-winners">당첨 목표 인원 (명)<input type="number" id="create-target-winners" value="2" min="1" max="100"></label>
+          <label for="create-rest-seconds">문제 사이 쉬는 시간 (초)<input type="number" id="create-rest-seconds" value="10" min="0" max="60" step="1"><small>기본 10초 · 0초면 바로 다음 문제</small></label>
+        </div>
+        <div class="quiz-builder-header builder-toolbar">
+          <div><h3>퀴즈 만들기 <span id="builder-count"></span></h3><p id="builder-save-status" aria-live="polite">작성 중 내용은 이 브라우저에도 자동 보관돼요</p></div>
+          <div class="builder-toolbar-actions"><button class="btn btn-primary btn-sm" onclick="addQuizStep(false)">+ 문제 추가</button></div>
+        </div>
+        <div id="builder-validation" class="builder-validation hidden" role="alert"></div>
+        <div id="quiz-builder-list" class="quiz-list-container"></div>
+
+        <div class="create-room-footer">
+          <button class="btn btn-success" style="padding:12px 24px; font-size:15px;" onclick="submitCreateRoom()">
+            이 퀴즈로 방 만들기 →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 2. 인게임 시안 HUD ==================== -->
+  <div id="game-hud" class="hidden">
+    <!-- 상단 중앙: 상태판 캡슐 + 문제 배너 + 골드 규칙 리본 -->
+    <div class="top-hud-stack">
+      <div id="question-board" class="question-banner hud-interactive">
+        <div class="question-meta-row">
+          <div class="banner-left">
+            <div id="q-step-info" class="round-label">ROUND 01 / 05</div>
+            <div id="q-type-sub" class="round-sub-type">OX 퀴즈</div>
+          </div>
+      <!-- (1) 통합 상태판 캡슐: 생존 / 유령 / 당첨 목표 -->
+      <div id="status-capsule" class="status-capsule hud-interactive">
+        <div id="pill-alive" class="status-pill alive-pill">
+          <span class="pill-icon">👤</span>
+          <span id="hud-alive-count">생존 6</span>
+        </div>
+        <div class="capsule-divider"></div>
+        <div id="pill-ghost" class="status-pill ghost-pill">
+          <span class="pill-icon">👻</span>
+          <span id="hud-ghost-count">유령 3</span>
+        </div>
+        <div class="capsule-divider"></div>
+        <div id="pill-target" class="status-pill target-pill">
+          <span class="pill-icon">🏆</span>
+          <span id="hud-target-count">목표 2명</span>
+        </div>
+      </div>
+
+          <div class="banner-right">
+            <div id="q-timer" class="timer-pill">⏱ 12초</div>
+          </div>
+        </div>
+
+        <div id="q-main-text" class="banner-question-text" tabindex="0" aria-label="문제 본문">
+          문어의 심장은 3개다.
+        </div>
+        <div id="minority-status" class="minority-status hidden" aria-label="소수결 참가 인원">
+          <span>왼쪽 <strong id="minority-left-count">0</strong>명</span><span>오른쪽 <strong id="minority-right-count">0</strong>명</span><small>적은 쪽 승리 · 동수 무작위</small>
+        </div>
+
+        <div id="question-scroll-hint" class="question-scroll-hint hidden">↕ 스크롤해서 문제 전체 보기</div>
+      </div>
+
+      <!-- 객관식일 때 문제 배너 바로 아래에 뜨는 1~4번 보기 캡슐 바 (시안 02번) -->
+      <div id="top-choices-bar" class="top-choices-bar hud-interactive hidden">
+        <div class="top-choice-chip" onclick="moveToLane(1)"><span class="c-num c1">1</span> <span id="top-c-1">고래</span></div>
+        <div class="top-choice-chip" onclick="moveToLane(2)"><span class="c-num c2">2</span> <span id="top-c-2">상어</span></div>
+        <div class="top-choice-chip" onclick="moveToLane(3)"><span class="c-num c3">3</span> <span id="top-c-3">문어</span></div>
+        <div class="top-choice-chip" onclick="moveToLane(4)"><span class="c-num c4">4</span> <span id="top-c-4">참치</span></div>
+      </div>
+
+      <div class="quiz-actions hud-interactive">
+        <button onclick="leaveRoom()">← 로비로</button>
+        <button id="btn-start-game" class="start-compact" onclick="startGame()">▶ 시작</button>
+        <button id="btn-show-results" class="hidden" onclick="showWinnerModal(roomState)">결과 보기</button>
+        <button id="btn-reset-game" onclick="resetGame()">↻ 새 게임</button>
+        <div class="quiz-action-tools">
+          <button onclick="focusMyCharacter()">◎ 나 찾기</button>
+          <button class="rules-link" onclick="document.getElementById('rules-dialog').showModal()">게임 규칙</button>
+        </div>
+      </div>
+      <!-- 패자부활전 중 우측에 뜨는 역할 교대 배지 (시안 04번) -->
+      <div id="revival-role-badge" class="revival-role-badge hidden">
+        <div class="role-row ghost-up">👻 유령 ↑ 무대 참가</div>
+        <div class="role-row alive-down">👤 생존자 ↓ 관전</div>
+      </div>
+    </div>
+
+<!-- 답안 패널 / 채팅 & 음소거 · 이동은 무대 터치 -->
+    <div class="bottom-controls-row">
+      <!-- 오른쪽 아래: 주관식 답안 패널 / 객관식 버튼 패널 / 기본 채팅·음소거 버튼 -->
+      <div class="bottom-right-area hud-interactive">
+        <!-- (A) 주관식 답안 입력 카드 (시안 01번과 동일한 크림색 카드) -->
+        <div id="short-answer-panel" class="answer-card short-card hidden">
+          <div class="answer-card-label">나만 보이는 답안 <span>비공개</span></div>
+          <div class="short-input-row">
+            <input
+              type="text"
+              id="short-answer-input"
+              placeholder="정답 입력"
+              maxlength="60"
+              enterkeyhint="send"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+            />
+            <button class="btn-mint-submit" onclick="submitShortAnswer()">제출</button>
+          </div>
+          <div id="local-answer-state" class="submitted-hint">나만 보이는 비공개 답안</div><div id="my-submitted-preview" class="submitted-hint hidden"></div>
+        </div>
+
+        <!-- (B) 객관식 2x2 버튼 선택 카드 (시안 03번과 동일한 크림색 2x2 패널) -->
+        <div id="multiple-answer-panel" class="answer-card multi-card hidden">
+          <div class="answer-card-label">보기를 선택하세요</div><div class="multi-grid-2x2">
+            <button class="multi-pick-btn" id="pick-btn-1" onclick="moveToLane(1)">
+              <span class="c-num c1">1</span> <span id="panel-c-1">고래</span>
+            </button>
+            <button class="multi-pick-btn" id="pick-btn-2" onclick="moveToLane(2)">
+              <span class="c-num c2">2</span> <span id="panel-c-2">상어</span>
+            </button>
+            <button class="multi-pick-btn" id="pick-btn-3" onclick="moveToLane(3)">
+              <span class="c-num c3">3</span> <span id="panel-c-3">문어</span>
+            </button>
+            <button class="multi-pick-btn" id="pick-btn-4" onclick="moveToLane(4)">
+              <span class="c-num c4">4</span> <span id="panel-c-4">참치</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 채팅 입력 팝업 -->
+        <div id="chat-popup" class="answer-card short-card hidden" style="margin-bottom:8px;">
+          <div class="short-input-row">
+            <input
+              type="text"
+              id="chat-input"
+              placeholder="메시지 입력..."
+              maxlength="40"
+              enterkeyhint="send"
+              autocomplete="off"
+            />
+            <button class="btn-mint-submit" onclick="sendChatMessage()">전송</button>
+          </div>
+        </div>
+
+        <!-- (C) 기본 채팅 & 음소거 버튼 (시안 우측 하단과 동일) -->
+        <div class="chat-sound-row">
+          <button id="btn-chat-toggle" class="cream-chat-btn" onclick="toggleChatPopup()">
+            <span class="chat-icon">💬</span>
+            <span>채팅</span>
+          </button>
+          <button id="btn-sound-toggle" class="sound-circle-btn" onclick="toggleSoundMute()" title="음소거 토글">
+            🔊
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="movement-joystick" class="joystick-zone hud-interactive hidden" aria-label="이동 조이스틱">
+      <div id="joystick-base" class="joystick-base" role="button" tabindex="0" aria-label="드래그하여 이동. 방향키로도 이동할 수 있습니다.">
+        <span class="joy-notch up" aria-hidden="true">▲</span><span class="joy-notch down" aria-hidden="true">▼</span>
+        <span class="joy-notch left" aria-hidden="true">◀</span><span class="joy-notch right" aria-hidden="true">▶</span>
+        <div id="joystick-knob" class="joystick-knob" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 3. 최종 당첨자 & 추첨 모달 ==================== -->
+  <div id="winner-modal" class="winner-modal hidden">
+    <div class="winner-card hud-interactive">
+      <h2 id="winner-modal-title">🏆 최종 당첨자 발표!</h2>
+      <p id="winner-modal-desc" style="font-size:14px; color:#475569; margin-bottom:12px;"></p>
+      <div id="winner-list" class="winner-list"></div>
+      <div id="survivor-extra-info" style="font-size:12px; color:#64748b; margin-bottom:18px;"></div>
+      <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px;">
+        <button class="btn btn-ghost" onclick="closeWinnerModal()">화면 닫기(결과보기)</button>
+        <button id="btn-modal-restart" class="btn btn-primary" onclick="resetGame()">재시작하기(결과 초기화)</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./pixelSprites.js?v=7"></script>
+  <dialog id="rules-dialog" aria-labelledby="rules-title">
+    <div class="intro-symbol">🏆</div><span class="intro-eyebrow">시작하기 전에</span>
+    <h2 id="rules-title">오늘의 퀴즈왕에 도전하세요!</h2>
+    <p>문제 결과 생존자가 당첨 목표 <strong>이하</strong>가 되면<br>남은 생존자 모두 즉시 당첨돼요.</p>
+    <p>마지막 문제 후 목표를 초과하면<br>생존자 중 목표 인원을 추첨해요.</p>
+    <p>모두 오답이면 직전 생존자를 기준으로 종료해요.<br>목표보다 많으면 그중 목표 인원을 추첨해요.</p>
+    <p class="intro-secondary">탈락해도 유령으로 관전할 수 있어요.<br>패자부활전에서 정답을 맞히면 다시 참가해요!</p>
+    <button onclick="this.closest('dialog').close()">알겠어요, 준비됐어요!</button>
+  </dialog>
+  <dialog id="my-quizzes-dialog" aria-labelledby="my-quizzes-heading">
+    <div class="my-quizzes-heading"><h2 id="my-quizzes-heading">퀴즈 불러오기</h2><button class="btn btn-ghost" onclick="this.closest('dialog').close()">닫기</button></div>
+    <form class="quiz-code-form" onsubmit="event.preventDefault();loadQuizByCode()">
+      <label for="quiz-load-code">코드로 불러오기</label>
+      <div><input id="quiz-load-code" type="text" maxlength="6" placeholder="AB7K2M" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="quiz-code-help quiz-code-message"><button id="btn-load-quiz-code" class="btn btn-primary" type="submit">불러오기</button></div>
+      <small id="quiz-code-help">같은 서버에서 발급한 6자리 코드를 입력하세요. 코드를 아는 사람은 문제와 정답을 불러올 수 있어요.</small>
+      <p id="quiz-code-message" role="status"></p>
+    </form>
+    <p>내가 저장한 퀴즈</p>
+    <div id="my-quizzes-list"></div>
+    <button class="btn btn-ghost new-library-quiz" onclick="newLibraryQuiz()">+ 새 퀴즈 만들기</button>
+  </dialog>
+  <dialog id="delete-quiz-dialog" aria-labelledby="delete-quiz-heading">
+    <h2 id="delete-quiz-heading">저장한 퀴즈를 삭제할까요?</h2>
+    <p id="delete-quiz-name"></p>
+    <p>보관함에서 삭제됩니다. 작성 중인 내용과 이미 열린 게임은 유지됩니다.</p>
+    <div class="delete-quiz-actions"><button class="btn btn-ghost" onclick="this.closest('dialog').close()">취소</button><button id="confirm-delete-quiz" class="btn delete-quiz-button" onclick="confirmQuizDeletion()">삭제</button></div>
+  </dialog>
+  <dialog id="save-quiz-dialog" aria-labelledby="save-quiz-heading" oncancel="event.preventDefault();cancelQuizOverwrite()">
+    <h2 id="save-quiz-heading">내용이 수정되었습니다</h2>
+    <p><strong id="save-quiz-original"></strong></p>
+    <p>기존에 저장한 퀴즈에 덮어쓰겠습니까?</p>
+    <button id="confirm-overwrite-quiz" class="btn btn-primary" onclick="confirmQuizOverwrite()">덮어쓰기</button>
+    <button class="btn btn-ghost" onclick="cancelQuizOverwrite()" autofocus>취소</button>
+  </dialog>
+  <dialog id="avatar-dialog" aria-labelledby="avatar-dialog-heading">
+    <div class="avatar-dialog-heading"><h2 id="avatar-dialog-heading">아바타 선택</h2><button class="btn btn-ghost" onclick="this.closest('dialog').close()">완료</button></div>
+    <div class="avatar-picker-content">
+      <div class="avatar-preview"><canvas id="avatar-preview-canvas" aria-label="선택한 아바타 3D 미리보기"></canvas><strong id="avatar-preview-name">기본</strong><p id="avatar-preview-description">노란 후드</p></div>
+      <div id="avatar-options" role="group" aria-label="아바타 목록"></div>
+    </div>
+    <p class="avatar-picker-hint">선택한 아바타로 입장해요. 다음 접속에도 유지됩니다.</p>
+  </dialog>
+  <script src="./vendor/GLTFLoader.js"></script>
+  <script src="./vendor/SkeletonUtils.js"></script>
+  <script src="./avatarCatalog.js?v=9"></script>
+  <script src="./avatarMotion.js?v=1"></script>
+  <script src="./livModel.js?v=11"></script>
+  <script src="./avatars.js?v=14"></script>
+  <script src="./avatarPicker.js?v=9"></script>
+  <script src="./quizLimits.js?v=1"></script>
+  <script src="./quizBuilder.js?v=14"></script>
+  <script src="./resultNotifications.js?v=1"></script>
+  <script src="./app.js?v=37"></script>
+</body>
+</html>
