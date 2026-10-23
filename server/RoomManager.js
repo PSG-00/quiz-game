@@ -75,7 +75,7 @@ function computeZone(type, x, z = 0) {
 class Room {
   constructor(options, hostId) {
     this.id = 'room_' + crypto.randomBytes(3).toString('hex');
-    this.title = (options.title || '모두의 OX 퀴즈쇼').slice(0, 40);
+    this.title = (options.title || '모두의 퀴즈').slice(0, 40);
     this.hostId = hostId;
     this.ownerTokenHash = options.ownerTokenHash || null;
     this.createdAt = options.createdAt || new Date().toISOString();

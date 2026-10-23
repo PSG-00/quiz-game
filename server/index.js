@@ -113,4 +113,4 @@ wss.on('connection',ws=>{
  });
  ws.on('close',leave);
 });
-server.listen(PORT,()=>console.log(`모두의 OX 퀴즈쇼: http://localhost:${PORT}`));
+server.listen(PORT,()=>console.log(`모두의 퀴즈: http://localhost:${PORT}`));

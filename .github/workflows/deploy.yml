@@ -20,3 +20,4 @@ jobs:
       - name: Deploy with PM2
         run: |
           PORT=3000 pm2 startOrRestart ecosystem.config.cjs --env production
+          pm2 save
