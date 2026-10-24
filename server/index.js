@@ -165,7 +165,9 @@ wss.on('connection',ws=>{
     case 'JOIN_ROOM': {
      const room=roomManager.getRoom(msg.roomId);if(!room)throw new Error('이미 종료된 방입니다.');
      const inheritedHost=evictDuplicateOwner(ownerHash,clientId,room);
-     if(!room.players.has(clientId)&&room.players.size>=100)throw new Error('이 방은 최대 100명까지 입장할 수 있어요.');
+     // Only the local load-test runner sets this internal capacity override.
+     const capacity=room.loadTestCapacity||100;
+     if(!room.players.has(clientId)&&room.players.size>=capacity)throw new Error(`이 방은 최대 ${capacity}명까지 입장할 수 있어요.`);
      if(currentRoom===room){send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();break;}
      leave();currentRoom=room;
      if(inheritedHost||!room.hostId||!room.players.has(room.hostId))room.hostId=clientId;

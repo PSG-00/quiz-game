@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
-  <link rel="stylesheet" href="./style.css?v=32" />
+  <link rel="stylesheet" href="./style.css?v=33" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -90,7 +90,7 @@
         <div class="nickname-box">
           <label for="nickname-input">내 닉네임</label>
           <input type="text" id="nickname-input" maxlength="12" placeholder="닉네임 입력" autocomplete="off" />
-          <button id="btn-avatar-picker" type="button" onclick="AvatarPicker.open()"><span id="selected-avatar-name">기본</span> · 아바타 선택</button>
+          <button id="btn-avatar-picker" type="button" onclick="AvatarPicker.open()"><span id="selected-avatar-name">원이</span> · 아바타 선택</button>
         </div>
       </div>
 
@@ -192,9 +192,6 @@
         <div id="q-main-text" class="banner-question-text" tabindex="0" aria-label="문제 본문">
           문어의 심장은 3개다.
         </div>
-        <div id="minority-status" class="minority-status hidden" aria-label="소수결 참가 인원">
-          <span>왼쪽 <strong id="minority-left-count">0</strong>명</span><span>오른쪽 <strong id="minority-right-count">0</strong>명</span><small>적은 쪽 승리 · 동수 무작위</small>
-        </div>
 
         <div id="question-scroll-hint" class="question-scroll-hint hidden">↕ 스크롤해서 문제 전체 보기</div>
       </div>
@@ -213,7 +210,7 @@
         <button id="btn-show-results" class="hidden" onclick="showWinnerModal(roomState)">결과 보기</button>
         <button id="btn-reset-game" onclick="resetGame()">↻ 새 게임</button>
         <div class="quiz-action-tools">
-          <button onclick="focusMyCharacter()">◎ 나 찾기</button>
+          <button id="btn-low-spec" type="button" onclick="toggleLowSpecMode()" aria-pressed="false">저사양 모드</button>
           <button class="rules-link" onclick="document.getElementById('rules-dialog').showModal()">게임 규칙</button>
           <button id="btn-fullscreen" type="button" onclick="toggleFullScreen()" title="전체화면 전환">⛶ 전체화면</button>
         </div>
@@ -324,6 +321,7 @@
     <p>마지막 문제 후 목표를 초과하면<br>생존자 중 목표 인원을 추첨해요.</p>
     <p>모두 오답이면 직전 생존자를 기준으로 종료해요.<br>목표보다 많으면 그중 목표 인원을 추첨해요.</p>
     <p class="intro-secondary">탈락해도 유령으로 관전할 수 있어요.<br>패자부활전에서 정답을 맞히면 다시 참가해요!</p>
+    <p id="rules-performance" class="intro-secondary">현재 프레임 측정 중… · 최대 144 FPS 설정</p>
     <button onclick="this.closest('dialog').close()">알겠어요, 준비됐어요!</button>
   </dialog>
       <dialog id="my-quizzes-dialog" aria-labelledby="my-quizzes-heading">
@@ -384,22 +382,30 @@
   <dialog id="avatar-dialog" aria-labelledby="avatar-dialog-heading">
     <div class="avatar-dialog-heading"><h2 id="avatar-dialog-heading">아바타 선택</h2><button class="btn btn-ghost" onclick="this.closest('dialog').close()">완료</button></div>
     <div class="avatar-picker-content">
-      <div class="avatar-preview"><canvas id="avatar-preview-canvas" aria-label="선택한 아바타 3D 미리보기"></canvas><strong id="avatar-preview-name">기본</strong><p id="avatar-preview-description">노란 후드</p></div>
+      <div class="avatar-preview"><canvas id="avatar-preview-canvas" aria-label="선택한 아바타 3D 미리보기"></canvas><strong id="avatar-preview-name">원이</strong><p id="avatar-preview-description">검정 생머리 · 트레이닝복</p></div>
       <div id="avatar-options" role="group" aria-label="아바타 목록"></div>
     </div>
     <p class="avatar-picker-hint">선택한 아바타로 입장해요. 다음 접속에도 유지됩니다.</p>
   </dialog>
   <script src="./vendor/GLTFLoader.js"></script>
   <script src="./vendor/SkeletonUtils.js"></script>
-  <script src="./avatarCatalog.js?v=9"></script>
-  <script src="./avatarMotion.js?v=1"></script>
-  <script src="./livModel.js?v=11"></script>
-  <script src="./avatars.js?v=14"></script>
-  <script src="./avatarPicker.js?v=9"></script>
+  <script src="./avatarCatalog.js?v=13"></script>
+  <script src="./avatarMotion.js?v=2"></script>
+  <script src="./avatarRig.js?v=1"></script>
+  <script src="./livModel.js?v=16"></script>
+  <script src="./instancedAvatars.js?v=1"></script>
+  <script src="./avatars.js?v=19"></script>
+  <script src="./avatarPicker.js?v=14"></script>
   <script src="./quizLimits.js?v=1"></script>
   <script src="./quizBuilder.js?v=17"></script>
   <script src="./resultNotifications.js?v=1"></script>
-  <script src="./app.js?v=39"></script>
+  <script src="./mobileCrowd.js?v=4"></script>
+  <script src="./framePacing.js?v=1"></script>
+  <script src="./vendor/FXAAShader.js"></script>
+  <script src="./sceneAntialias.js?v=2"></script>
+  <script src="./crowdDecorations.js?v=1"></script>
+  <script src="./showHost.js?v=1"></script>
+  <script src="./app.js?v=50"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

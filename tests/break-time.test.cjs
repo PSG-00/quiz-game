@@ -18,6 +18,15 @@ function room(options={}){
 test('기본 흐름은 정답 3초 → 휴식 5초 → 다음 문제, 추가 준비 시간 없음',()=>clock(({advance,now})=>{
  const r=room();r.judgeQuestion();assert.equal(r.state,'JUDGE');assert.equal(r.stateEndTime-now(),3000);advance(2999);assert.equal(r.state,'JUDGE');advance(1);assert.equal(r.state,'BREAK');assert.equal(r.stateEndTime-now(),5000);advance(4999);assert.equal(r.currentQuestionIndex,0);advance(1);assert.equal(r.state,'QUESTION');assert.equal(r.currentQuestionIndex,1);assert.equal(r.stateEndTime-now(),5000);
 }));
+test('게임 시작 카운트다운 뒤 추가 준비 없이 첫 문제, 기존 무대 좌표 유지',()=>clock(({advance})=>{
+ const r=room();r.resetToWaiting();
+ for(const [i,p] of [...r.players.values()].entries()){p.x=-4+i*2;p.z=-2+i;}
+ const positions=[...r.players.values()].map(p=>[p.x,p.z]);
+ r.startGame();assert.equal(r.state,'COUNTDOWN');advance(3499);assert.equal(r.state,'COUNTDOWN');advance(1);
+ assert.equal(r.state,'QUESTION');assert.equal(r.currentQuestionIndex,0);
+ assert.deepEqual([...r.players.values()].map(p=>[p.x,p.z]),positions);r.resetToWaiting();
+}));
+
 test('설정한 휴식 시간을 적용하며 0초는 정답 공개 직후 다음 문제 시작',()=>clock(({advance,now})=>{
  for(const restSeconds of [0,1,7,60]){const r=room({restSeconds});r.judgeQuestion();advance(3000);if(restSeconds){assert.equal(r.state,'BREAK');assert.equal(r.stateEndTime-now(),restSeconds*1000);advance(restSeconds*1000);}assert.equal(r.state,'QUESTION');assert.equal(r.currentQuestionIndex,1);r.resetToWaiting();}
 }));

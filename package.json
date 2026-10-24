@@ -4,7 +4,8 @@
   "description": "모바일 세로 화면 우선 2.5D 멀티플레이 퀴즈쇼",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test tests/*.test.cjs"
+    "test": "node --test tests/*.test.cjs",
+    "test:100": "node scripts/load-test-room.cjs"
   },
   "dependencies": {
     "express": "^4.21.2",

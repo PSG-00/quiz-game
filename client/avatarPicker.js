@@ -12,8 +12,7 @@ window.AvatarPicker=(()=>{
  }
  function makeOption(profile,label){
    const button=document.createElement('button');button.type='button';button.className='avatar-option';button.dataset.avatarId=profile.id;button.setAttribute('aria-label',label+' 아바타');button.title=profile.description;button.onclick=()=>choose(profile.id);
-   if(profile.id!=='default'){const img=document.createElement('img');img.src=profile.preview||'./assets/avatars/'+profile.id+'_focus.png';img.alt='';img.loading='lazy';button.append(img);}
-   else{button.classList.add('avatar-default-option');const icon=document.createElement('span');icon.className='avatar-base-icon';icon.textContent='🙂';button.append(icon);}
+   const img=document.createElement('img');img.src=profile.preview||'./assets/avatars/'+profile.id+'_focus.png';img.alt='';img.loading='lazy';button.append(img);
    const name=document.createElement('span');name.className='avatar-option-name';name.textContent=label;button.append(name);
    return button;
  }
@@ -31,8 +30,9 @@ window.AvatarPicker=(()=>{
  }
  function updateModel(){
   if(!previewScene)return;
-  if(previewModel){previewScene.remove(previewModel);ClayAvatars.dispose(previewModel);}
-  previewModel=ClayAvatars.create(0,false,selectedId);previewScene.add(previewModel);
+  if(previewModel){previewScene.remove(previewModel);AvatarActors.dispose(previewModel);}
+  previewModel=AvatarActors.create(0,selectedId);previewScene.add(previewModel);
+  document.getElementById('avatar-preview-description').textContent=previewModel.userData.pendingModel?'캐릭터 불러오는 중…':AvatarCatalog.get(selectedId).description;
  }
  function open(){
   const dialog=document.getElementById('avatar-dialog');dialog.showModal();
@@ -51,7 +51,7 @@ window.AvatarPicker=(()=>{
    if(canvas.width!==Math.round(width*previewRenderer.getPixelRatio())||canvas.height!==Math.round(height*previewRenderer.getPixelRatio()))previewRenderer.setSize(width,height,false);
    const halfW=1.8*width/height;previewCamera.left=-halfW;previewCamera.right=halfW;previewCamera.updateProjectionMatrix();
    previewModel.rotation.y=Math.sin(time*.0006)*.28;
-   ClayAvatars.update(previewModel,false,false,time,0);previewRenderer.render(previewScene,previewCamera);frame=requestAnimationFrame(animate);
+   AvatarActors.update(previewModel,false,false,time,0);previewRenderer.render(previewScene,previewCamera);frame=requestAnimationFrame(animate);
   }
   cancelAnimationFrame(frame);frame=requestAnimationFrame(animate);
  }

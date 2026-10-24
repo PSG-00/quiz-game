@@ -221,7 +221,7 @@ class Room {
     this.stateEndTime = Date.now() + 3500;
 
     this.broadcastRoomEvent();
-    this.timerHandle = setTimeout(() => this.nextQuestion(), 3500);
+    this.timerHandle = setTimeout(() => this.nextQuestion({skipPreparation:true}), 3500);
   }
 
   breakBeforeNextQuestion(){

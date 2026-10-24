@@ -82,13 +82,21 @@ scene.background = new THREE.Color(0xeee8e2);
 
 
 const camera = new THREE.PerspectiveCamera(42,window.innerWidth/window.innerHeight,.1,600);
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const mobilePerformance=matchMedia('(pointer:coarse)').matches||(navigator.maxTouchPoints>0&&Math.min(innerWidth,innerHeight)<850);
+let lowSpecMode=false;
+try{lowSpecMode=localStorage.getItem('ox-low-spec-v1')==='1';}catch{}
+// Shared batches are allocated once on PC and mobile. Detail restoration is
+// spread across frames, keeping the local player's model independent.
+MobileCrowd.attach(scene);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+const sceneAntialias=SceneAntialias.create(renderer,!mobilePerformance);
+InstancedAvatars.attach(scene,renderer);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(mobilePerformance?Math.min(2,window.devicePixelRatio,Math.sqrt(1600000/(innerWidth*innerHeight))):Math.min(window.devicePixelRatio,2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !mobilePerformance;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 const nameplates = document.createElement('div');
@@ -203,7 +211,7 @@ const deskMesh = new THREE.Mesh(deskGeo, deskMat);
 deskMesh.position.set(0,1.3,.65);
 podiumGroup.add(deskMesh);
 
-const hostSprite = window.ClayAvatars.create(0, true);
+const hostSprite = ShowHost.create();
 hostSprite.position.set(0,.6,-.3);
 hostSprite.scale.setScalar(1.25);
 podiumGroup.add(hostSprite);
@@ -426,6 +434,7 @@ function updateFollowCamera(dt,restore=false){
   if(!restore)cameraFollow.x+=(cameraFollow.targetX-cameraFollow.x)*(1-Math.exp(-7*dt));
   camera.position.x=cameraFollow.x;camera.updateMatrixWorld(true);
 }
+let cameraFrame=null;
 function updateCameraForScreen() {
   if(chatSceneLayout){
     if(window.innerWidth===chatSceneLayout.windowWidth)return;
@@ -441,7 +450,15 @@ function updateCameraForScreen() {
   const w=container.clientWidth||window.innerWidth,h=container.clientHeight||window.innerHeight;
   const portrait=portraitScreen();
   layoutScaleX=1.4;layoutScaleZ=1.3;
-  fitStageCamera(w,h);
+  const frameKey=`${innerWidth}:${innerHeight}:${currentRoomId||'lobby'}`;
+  if(!cameraFrame||cameraFrame.key!==frameKey){
+    fitStageCamera(w,h);cameraFrame={key:frameKey,width:w,height:h,offsetY:camera.view?.offsetY||0};
+  }else{
+    // Crop the header from the same camera field; changing question height must
+    // not zoom/pan the entire board or make everyone appear to respawn.
+    camera.setViewOffset(cameraFrame.width,cameraFrame.height,0,cameraFrame.offsetY+cameraFrame.height-h,w,h);
+    camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  }
   worldGroup.scale.set(layoutScaleX,1,layoutScaleZ);
   podiumGroup.position.set(0,STAGE_HEIGHT,STAGE_MIN_Z*layoutScaleZ-1.9);
   // Always frame the outside spectator walkway, even before anyone is eliminated.
@@ -460,7 +477,9 @@ function updateCameraForScreen() {
     const fit=Math.min(.9,desiredPixels/(mark.geometry.parameters.width*focal/distance));
     mark.scale.set(fit,fit/Math.sin(CAMERA_ELEVATION),1);
   }
-  renderer.setSize(w,h);
+  // setSize clears the drawing buffer even when its dimensions did not change.
+  const renderSize=renderer.getSize(new THREE.Vector2());
+  if(renderSize.x!==w||renderSize.y!==h){renderer.setSize(w,h);sceneAntialias.render(scene,camera);}
   if(isSceneInputFocused()&&!chatSceneLayout)freezeSceneForInput();
 }
 window.addEventListener('resize', updateCameraForScreen);
@@ -496,6 +515,7 @@ const shadowMat = new THREE.MeshBasicMaterial({
   opacity: 0.28,
   depthWrite: false
 });
+CrowdDecorations.attach(scene,shadowGeo,shadowMat);
 
 const goldRingGeo = new THREE.PlaneGeometry(2.8, 2.8);
 
@@ -514,6 +534,7 @@ function getOrCreatePlayerEntity(p) {
 
   // 다른 캐릭터 발밑에는 식별 링을 그리지 않고 접지 그림자만 사용한다!
   const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+  if(!isMe)shadowMesh.visible=false;
   shadowMesh.rotation.x = -Math.PI / 2;
   shadowMesh.position.y = 0.04;
   group.add(shadowMesh);
@@ -536,8 +557,9 @@ function getOrCreatePlayerEntity(p) {
 
   // Use the server's validated selection for both local and remote players.
   const avatarId=AvatarCatalog.normalize(p.av);
-  const avatarSeed=avatarId==='default'?0:p.s;
-  const charSprite = window.ClayAvatars.create(avatarSeed,false,avatarId);
+  const avatarSeed=p.s;
+  const lowDetail=!isMe&&lowSpecMode;
+  const charSprite = lowDetail?MobileCrowd.create(avatarId,avatarSeed):isMe?AvatarActors.create(avatarSeed,avatarId):AvatarActors.pending(avatarId);
   group.add(charSprite);
 
   // 머리 위 O/X·번호·관전 말풍선 + 내 캐릭터 전용 '나' 표식 캔버스
@@ -552,6 +574,7 @@ function getOrCreatePlayerEntity(p) {
     transparent: true,
     depthTest: false
   });
+  if(!isMe)overheadMat.visible=false;
   const overheadSprite = new THREE.Sprite(overheadMat);
   // Anchor the visible tail, excluding the transparent canvas padding.
   overheadSprite.center.set(.5,1-(isMe?70:96)/128);
@@ -580,7 +603,12 @@ function getOrCreatePlayerEntity(p) {
     chatText,
     group,
     charSprite,
+    detailedAvatar:lowDetail?null:charSprite,
+    simpleAvatar:lowDetail?charSprite:null,
     avatarId,
+    lowDetail,
+    lastPose:0,
+    labelHeight:0,
     overheadSprite,
     overheadCanvas,
     overheadTex,
@@ -644,6 +672,7 @@ function computeOverheadBadge(entity) {
   return { text: ox, theme: ox };
 }
 
+const overheadBadgeCache=new Map();
 function updatePlayerOverheadIfNeeded(entity) {
   const isMe = entity.id === myClientId;
   const badge = computeOverheadBadge(entity);
@@ -651,24 +680,81 @@ function updatePlayerOverheadIfNeeded(entity) {
 
   if (entity.lastBadgeKey !== key) {
     entity.lastBadgeKey = key;
-    window.PixelSprites.drawOverheadCanvas(
-      entity.overheadCanvas,
-      badge.text,
-      badge.theme,
-      isMe,
-      false // The local nameplate now carries the separate 나 marker.
-    );
-    entity.overheadTex.needsUpdate = true;
+    let texture=overheadBadgeCache.get(key);
+    if(!texture){const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;PixelSprites.drawOverheadCanvas(canvas,badge.text,badge.theme,isMe,false);texture=new THREE.CanvasTexture(canvas);texture.userData={sharedBadge:true};overheadBadgeCache.set(key,texture);}
+    if(!entity.overheadTex.userData?.sharedBadge)entity.overheadTex.dispose();
+    entity.overheadTex=texture;entity.overheadSprite.material.map=texture;
   }
 }
 
-// ==================== 4. 60 FPS 렌더링 & 보간 루프 ====================
+// ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
 const clock = new THREE.Clock();
+let frameNumber=0,perfFrames=0,perfSince=performance.now(),renderFps=0,lastWorldAt=0,worldGap=0,lastRenderFrame=0;
+const frameSamples=[],refreshSamples=[];let lastAnimationFrame=0;
+const framePacing=FramePacing.create(144);
+const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
+function disposeEntityAvatar(entity){
+  if(entity.detailedAvatar){entity.group.remove(entity.detailedAvatar);AvatarActors.dispose(entity.detailedAvatar);}
+  if(entity.simpleAvatar){entity.group.remove(entity.simpleAvatar);MobileCrowd.dispose(entity.simpleAvatar);}
+  entity.detailedAvatar=null;entity.simpleAvatar=null;
+}
+function setEntityDetail(entity,simple){
+  if(entity.id===myClientId)simple=false;
+  if(simple){
+    if(!entity.simpleAvatar){entity.simpleAvatar=MobileCrowd.create(entity.avatarId,entity.seed);entity.group.add(entity.simpleAvatar);}
+    if(entity.detailedAvatar){if(entity.detailedAvatar.userData.instancedAvatar)InstancedAvatars.hide(entity.detailedAvatar);entity.detailedAvatar.visible=false;entity.group.remove(entity.detailedAvatar);}
+    entity.group.add(entity.simpleAvatar);entity.simpleAvatar.visible=true;entity.charSprite=entity.simpleAvatar;
+  }else{
+    const model=AvatarActors.model(entity.avatarId);
+    // Keep the existing loading/SD state until the requested GLB is ready.
+    if(model&&!model.loaded){model.load();if(entity.simpleAvatar)return;}
+    const cached=entity.detailedAvatar;
+    if(cached&&!cached.userData.importedGLB&&(!model||model.loaded)){entity.group.remove(cached);AvatarActors.dispose(cached);entity.detailedAvatar=null;}
+    if(!entity.detailedAvatar){entity.detailedAvatar=(entity.id!==myClientId?InstancedAvatars.create(entity.avatarId,entity.seed):null)||AvatarActors.create(entity.seed,entity.avatarId);entity.group.add(entity.detailedAvatar);}
+    if(entity.simpleAvatar){MobileCrowd.hide(entity.simpleAvatar);entity.simpleAvatar.visible=false;entity.group.remove(entity.simpleAvatar);}
+    entity.group.add(entity.detailedAvatar);entity.detailedAvatar.visible=true;entity.charSprite=entity.detailedAvatar;
+  }
+  entity.lowDetail=simple;entity.lastPose=0;entity.labelHeight=0;
+}
+function restoreAvatarDetails(){
+  if(lowSpecMode)return;
+  const deadline=performance.now()+3;let restored=0;
+  for(const entity of playerEntities.values()){
+    if(entity.id===myClientId)continue;
+    const model=AvatarActors.model(entity.avatarId);
+    if(model&&!model.loaded)continue;
+    const upgrade=!entity.lowDetail&&(entity.charSprite.userData.pendingModel||!entity.charSprite.userData.importedGLB&&model?.loaded);
+    if(!entity.lowDetail&&!upgrade)continue;
+    setEntityDetail(entity,false);
+    if(++restored>=2||performance.now()>=deadline)break;
+  }
+}
+function updateLowSpecButton(){
+  const button=document.getElementById('btn-low-spec');
+  button.textContent=lowSpecMode?'저사양 모드 ON':'저사양 모드';
+  button.setAttribute('aria-pressed',String(lowSpecMode));
+  button.title=lowSpecMode?'다른 참가자를 원래 아바타로 표시':'내 캐릭터를 제외한 참가자를 간단한 SD로 표시';
+}
+window.toggleLowSpecMode=function(){
+  lowSpecMode=!lowSpecMode;
+  try{localStorage.setItem('ox-low-spec-v1',lowSpecMode?'1':'0');}catch{}
+  if(lowSpecMode)for(const entity of playerEntities.values())if(entity.id!==myClientId)setEntityDetail(entity,true);
+  updateLowSpecButton();
+};
+updateLowSpecButton();
 
-function animate() {
+function animate(frameTime) {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.1);
   const now = performance.now();
+  if(document.hidden){framePacing.accept(frameTime,true);lastRenderFrame=0;lastAnimationFrame=0;return;}
+  if(lastAnimationFrame){refreshSamples.push(frameTime-lastAnimationFrame);if(refreshSamples.length>240)refreshSamples.shift();}lastAnimationFrame=frameTime;
+  // rAF follows the browser/display refresh rate; never force a 60 Hz mobile cap.
+  if(!framePacing.accept(frameTime))return;
+  if(lastRenderFrame){frameSamples.push(frameTime-lastRenderFrame);if(frameSamples.length>240)frameSamples.shift();}lastRenderFrame=frameTime;
+  const dt = Math.min(clock.getDelta(), 0.1);
+  restoreAvatarDetails();
+  frameNumber++;perfFrames++;if(now-perfSince>=1000){renderFps=perfFrames*1000/(now-perfSince);perfFrames=0;perfSince=now;const stats=document.getElementById('rules-performance');if(stats&&document.getElementById('rules-dialog').open)stats.textContent=`현재 ${Math.round(renderFps)} FPS · 최대 144 FPS 설정`;}
+  avatarViewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);avatarFrustum.setFromProjectionMatrix(avatarViewProjection);
   const joystickEnabled=portraitScreen()&&canMove();
   joystickRoot.classList.toggle('hidden',!joystickEnabled);
   if(!joystickEnabled&&(joystick.pointerId!==null||joystick.x||joystick.z))resetJoystick();
@@ -757,8 +843,20 @@ function animate() {
     if(dist<.08)entity.motion.teleporting=false;
     AvatarMotion.advance(entity.motion,dt,facingX,facingZ,dist*lerp,entity.motion.teleporting);
     entity.charSprite.rotation.y=entity.motion.heading;
-    window.ClayAvatars.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);
     entity.group.position.set(viewPosition.x, entity.y, viewPosition.z);
+    avatarSphere.center.copy(entity.group.position);avatarSphere.center.y+=1.5;
+    const inView=entity.id===myClientId||avatarFrustum.intersectsSphere(avatarSphere);entity.group.visible=inView;
+    if(!inView){if(entity.lowDetail)MobileCrowd.hide(entity.charSprite);else if(entity.charSprite.userData.instancedAvatar)InstancedAvatars.hide(entity.charSprite);entity.nameLabel.style.visibility='hidden';entity.chatBubble.classList.add('hidden');continue;}
+    if(entity.lowDetail){entity.charSprite.rotation.y=0;MobileCrowd.update(entity.charSprite,!entity.alive,entity.motion.heading,now,entity.motion);}
+    else if(entity.charSprite.userData.instancedAvatar||!mobilePerformance||entity.id===myClientId||now-entity.lastPose>33){window.AvatarActors.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);entity.lastPose=now;}
+    // Keep bodies and local controls at display rate. Remote DOM nameplates and
+    // chat layout need at most 30 Hz, including on desktop with 100 players.
+    if(mobilePerformance&&entity.id!==myClientId&&frameNumber%3)continue;
+    if(!mobilePerformance&&entity.id!==myClientId){
+      if(!entity.nextLabelAt)entity.nextLabelAt=now+(entity.seed%4)*8;
+      if(now<entity.nextLabelAt)continue;
+      entity.nextLabelAt=now+1000/30;
+    }
     const displayHeight=entity.charSprite.userData.displayHeight||entity.charSprite.userData.visualHeight||2.95;
     nicknamePosition.set(viewPosition.x,entity.y+displayHeight,viewPosition.z).project(camera);
     const nameVisible = Math.abs(nicknamePosition.x)<1.1 && Math.abs(nicknamePosition.y)<1.1 && Math.abs(nicknamePosition.z)<1;
@@ -766,7 +864,8 @@ function animate() {
     entity.nameLabel.style.visibility = nameVisible ? 'visible' : 'hidden';
     entity.nameLabel.style.transform = `translate3d(${anchorX}px,${nameY}px,0) translate(-50%,-100%)`;
     entity.nameLabel.classList.toggle('find-me-muted',entity.id!==myClientId && performance.now()<findMeUntil);
-    const badgeBottom=nameY-entity.nameLabel.offsetHeight-3;
+    if(!entity.labelHeight)entity.labelHeight=entity.nameLabel.offsetHeight;
+    const badgeBottom=nameY-entity.labelHeight-3;
     badgePosition.set(nicknamePosition.x,1-badgeBottom/viewHeight*2,nicknamePosition.z).unproject(camera);
     const depth=-badgePosition.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const badgeWidth=entity.id===myClientId?104:96,badgeHeight=badgeWidth/2;
@@ -822,7 +921,7 @@ function animate() {
   podiumGroup.visible=!!currentRoomId;
   hostSpeechBubble.style.visibility=currentRoomId?'visible':'hidden';
   if(currentRoomId){
-    hostSprite.userData.body.position.y=Math.sin(now*.002)*.025;
+    ShowHost.update(hostSprite,now,roomState?.state);
     podiumGroup.updateMatrixWorld(true);
     hostSpeechAnchor.set(0,4.25,-.3).applyMatrix4(podiumGroup.matrixWorld).project(camera);
     hostSpeechBubble.style.visibility=Math.abs(hostSpeechAnchor.x)<.96&&Math.abs(hostSpeechAnchor.y)<1?'visible':'hidden';
@@ -834,10 +933,14 @@ function animate() {
     hostSpeechBubble.style.setProperty('--host-tail-x',Math.max(12,Math.min(width-12,anchorX-left))+'px');
   }
   updateTimerDisplay();
-  renderer.render(scene, camera);
+  MobileCrowd.flush();
+  InstancedAvatars.flush();
+  CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
+  sceneAntialias.render(scene, camera);
 }
 
 requestAnimationFrame(animate);
+window.QuizPerformance={snapshot:()=>({mobile:mobilePerformance,lowSpec:lowSpecMode,fps:Math.round(renderFps),antialias:sceneAntialias.mode,frameLimit:144,frameP95Ms:frameSamples.length?Math.round([...frameSamples].sort((a,b)=>a-b)[Math.floor(frameSamples.length*.95)]*10)/10:null,browserCallbackHz:refreshSamples.length?Math.round(1000/(refreshSamples.reduce((a,b)=>a+b,0)/refreshSamples.length)):null,pixelRatio:renderer.getPixelRatio(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,worldGapMs:Math.round(worldGap),worldAgeMs:lastWorldAt?Math.round(performance.now()-lastWorldAt):null,detailed:[...playerEntities.values()].filter(e=>!e.lowDetail).length,proxies:[...playerEntities.values()].filter(e=>e.lowDetail).length,cachedDetails:[...playerEntities.values()].filter(e=>e.detailedAvatar).length,crowd:MobileCrowd.stats(),decorations:CrowdDecorations.stats(),host:{triangles:hostSprite.userData.triangles,drawCalls:hostSprite.userData.drawCalls},instancing:InstancedAvatars.stats()})};
 
 // ==================== 5. 웹소켓 통신 ====================
 function connectWebSocket() {
@@ -947,6 +1050,7 @@ function triggerPillBump(elementId) {
 }
 
 function handleWorldTick(compactList) {
+  const receivedAt=performance.now();if(lastWorldAt)worldGap=receivedAt-lastWorldAt;lastWorldAt=receivedAt;
   const hadSpectators = [...playerEntities.values()].some(entity=>!entity.onStage);
   const seenIds = new Set();
   let aliveCount = 0;
@@ -959,12 +1063,14 @@ function handleWorldTick(compactList) {
 
     const entity = getOrCreatePlayerEntity(p);
     const avatarId=AvatarCatalog.normalize(p.av);
-    if(entity.avatarId!==avatarId||(window.AvatarModels?.[avatarId]?.loaded&&!entity.charSprite.userData.importedGLB)){
-      entity.group.remove(entity.charSprite);ClayAvatars.dispose(entity.charSprite);
-      entity.charSprite=ClayAvatars.create(avatarId==='default'?0:p.s,false,avatarId);entity.group.add(entity.charSprite);entity.avatarId=avatarId;
+    if(entity.avatarId!==avatarId){
+      disposeEntityAvatar(entity);entity.avatarId=avatarId;entity.seed=p.s;
+      setEntityDetail(entity,entity.id!==myClientId&&lowSpecMode);
+    }else if(entity.id===myClientId&&window.AvatarModels?.[avatarId]?.loaded&&!entity.charSprite.userData.importedGLB){
+      setEntityDetail(entity,false);
     }
 
-    if (entity.name !== p.n) { entity.name = p.n; entity.nameLabel.textContent = p.n; }
+    if (entity.name !== p.n) { entity.name = p.n; entity.nameLabel.textContent = p.n;entity.labelHeight=0; }
     entity.nameLabel.classList.toggle('is-ghost',!p.a);
     const roleChanged = entity.onStage !== Boolean(p.st);
     if(roleChanged||Math.hypot(p.x-entity.x,p.z-entity.z)>8)entity.motion.teleporting=true;
@@ -972,7 +1078,7 @@ function handleWorldTick(compactList) {
     entity.onStage = Boolean(p.st);
     entity.targetY = p.st ? STAGE_HEIGHT : 0;
     entity.isEditing = Boolean(p.e);
-    if (p.i === myClientId && (roleChanged || ['PREPARING', 'JUDGE'].includes(roomState?.state))) {
+    if (p.i === myClientId && roleChanged) {
       myPos = { x: p.x, z: p.z }; myMoveTarget = null;
       entity.targetX = p.x; entity.targetZ = p.z;
     }
@@ -994,7 +1100,7 @@ function handleWorldTick(compactList) {
   for (const [id, ent] of playerEntities.entries()) {
     if (!seenIds.has(id)) {
       scene.remove(ent.group);
-      ClayAvatars.dispose(ent.charSprite);
+      disposeEntityAvatar(ent);
       ent.nameLabel.remove();
       ent.chatBubble.remove();
       playerEntities.delete(id);
@@ -1012,19 +1118,9 @@ function handleWorldTick(compactList) {
     if (prevGhostCount !== -1) triggerPillBump('pill-ghost');
     prevGhostCount = ghostCount;
   }
-  updateMinorityCounts();
   if(hadSpectators !== [...playerEntities.values()].some(entity=>!entity.onStage))requestAnimationFrame(updateCameraForScreen);
 }
 
-function updateMinorityCounts(){
-  if(roomState?.currentQuestion?.type!=='MINORITY')return;
-  const outcome=roomState.minorityOutcome;
-  const participants=[...playerEntities.values()].filter(entity=>entity.onStage);
-  const left=outcome?outcome.leftCount:participants.filter(entity=>entity.targetX<0).length;
-  const right=outcome?outcome.rightCount:participants.length-left;
-  document.getElementById('minority-left-count').textContent=left;
-  document.getElementById('minority-right-count').textContent=right;
-}
 function handleRoomStateUpdate(stateMsg) {
   document.getElementById('hud-target-count').textContent = `목표 ${stateMsg.targetWinners}명`;
 
@@ -1054,8 +1150,6 @@ function handleRoomStateUpdate(stateMsg) {
   const winnerModal = document.getElementById('winner-modal');
 
   const q = stateMsg.currentQuestion;
-  document.getElementById('minority-status').classList.toggle('hidden',!(q?.type==='MINORITY'&&['PREPARING','QUESTION','JUDGE'].includes(stateMsg.state)));
-  updateMinorityCounts();
   // Membership updates repeat ROOM_STATE for the same question. Keep focused
   // inputs mounted and untouched so mobile keyboards and IME composition stay open.
   const phaseKey = JSON.stringify([stateMsg.roomId, stateMsg.gameId, stateMsg.state, q?.index, stateMsg.stateEndTime]);
@@ -1121,7 +1215,7 @@ function handleRoomStateUpdate(stateMsg) {
     mainText.textContent='잠깐 쉬어요! 자유롭게 채팅해 주세요.';
   } else if (stateMsg.state === 'PREPARING' && q) {
     stepInfo.textContent = 'GET READY'; typeSub.textContent = q.isRevival ? '패자부활전 · 역할 교대' : '무대 준비 중';
-    mainText.textContent = '모두 제자리로, 곧 시작해요!';
+    mainText.textContent = q.isRevival?'참가 구역을 바꾸고 있어요. 곧 시작해요!':'현재 위치에서 곧 시작해요!';
   } else if (stateMsg.state === 'QUESTION' && q) {
     winnerModal.classList.add('hidden');
     const rNum = String(q.index + 1).padStart(2, '0');
