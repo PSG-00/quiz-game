@@ -3,3 +3,4 @@ artifacts/
 *.log
 
 data/
+client/perf/

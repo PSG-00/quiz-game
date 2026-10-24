@@ -55,14 +55,14 @@ window.InstancedAvatars=(()=>{
        }
      }
    }
-   const pose=new T.InstancedBufferAttribute(new Float32Array(capacity*2),2);pose.setUsage(T.DynamicDrawUsage);
-   const batches=parts.map(part=>{
+   const poses=Array.from({length:3},()=>new T.InstancedBufferAttribute(new Float32Array(capacity*2),2).setUsage(T.DynamicDrawUsage));
+   const batches=parts.flatMap(part=>[0,1,2].map(level=>{
      const source=part.source,width=part.bones*4;
      const texture=new T.DataTexture(part.data,width,frames+1,T.RGBAFormat,T.FloatType);
      texture.minFilter=texture.magFilter=T.NearestFilter;texture.generateMipmaps=false;texture.needsUpdate=true;
      // A geometry wrapper owns only the per-pool pose attribute; source vertex
      // buffers and indices are read-only references shared with the local model.
-     const geometry=new T.BufferGeometry();geometry.setIndex(source.geometry.index);
+     const geometry=new T.BufferGeometry();geometry.setIndex(level?(source.geometry.userData.lodIndices?.[level-1]||source.geometry.index):source.geometry.index);
      for(const [name,attribute] of Object.entries(source.geometry.attributes))geometry.setAttribute(name,attribute);
      if(!source.isSkinnedMesh){
        const count=source.geometry.attributes.position.count,weights=new Float32Array(count*4);
@@ -71,7 +71,7 @@ window.InstancedAvatars=(()=>{
        geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));
      }
      for(const group of source.geometry.groups)geometry.addGroup(group.start,group.count,group.materialIndex);
-     geometry.setAttribute('crowdPose',pose);
+     geometry.setAttribute('crowdPose',poses[level]);
      const material=source.material.clone();material.skinning=false;
      material.onBeforeCompile=shader=>{
        shader.uniforms.crowdBones={value:texture};shader.uniforms.crowdTextureSize={value:new T.Vector2(width,frames+1)};
@@ -86,9 +86,9 @@ window.InstancedAvatars=(()=>{
      // Ground contact is already provided by the existing shared foot shadows.
      // Avoid a separate animated shadow pass for every remote participant.
      mesh.castShadow=false;mesh.receiveShadow=true;scene.add(mesh);
-     return {mesh,texture};
-   });
-   const pool={id,batches,pose,next:0,free:[],live:new Set(),dirty:false,visualHeight:rig.userData.visualHeight};
+     return {mesh,texture,level};
+   }));
+   const pool={id,batches,poses,next:0,free:[],live:new Set(),dirty:false,visualHeight:rig.userData.visualHeight};
    model.dispose(rig);pools.set(id,pool);return pool;
  }
  function create(id,seed){
@@ -105,21 +105,20 @@ window.InstancedAvatars=(()=>{
    d.phase=(motion?.phase||0)/(Math.PI*2)*frames;d.blend=motion?.blend||0;
    d.shown=true;d.pool.dirty=true;
  }
- function flush(){
+ function flush(camera,height){
    for(const pool of pools.values())if(pool.dirty){
-     let count=0;
+     const counts=[0,0,0];
      // Compact only visible living instances. A zero-scale matrix would still
      // run the vertex shader for every hidden character's entire geometry.
      for(const root of pool.live)if(root.userData.shown){
-       const d=root.userData;d.drawSlot=count;pool.pose.setXY(count,d.phase,d.blend);
-       for(const {mesh} of pool.batches)mesh.setMatrixAt(count,root.matrixWorld);
-       count++;
+       const d=root.userData,level=AvatarLOD.level(root,camera,height),count=counts[level]++;d.drawSlot=count;pool.poses[level].setXY(count,d.phase,d.blend);
+       for(const {mesh,level:l} of pool.batches)if(l===level)mesh.setMatrixAt(count,root.matrixWorld);
      }
-     for(const {mesh} of pool.batches){mesh.count=count;mesh.visible=count>0;mesh.instanceMatrix.needsUpdate=true;}
-     pool.pose.needsUpdate=true;pool.dirty=false;
+     for(const {mesh,level} of pool.batches){mesh.count=counts[level];mesh.visible=mesh.count>0;mesh.instanceMatrix.needsUpdate=true;}
+     for(const pose of pool.poses)pose.needsUpdate=true;pool.counts=counts;pool.dirty=false;
    }
  }
  function dispose(root){const d=root.userData;if(!d.pool.live.delete(root))return;hide(root);d.pool.free.push(d.slot);}
- function stats(){return {supported,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,draws:p.batches.length,frames,bones:p.batches[0].texture.image.width/4,textureBytes:p.batches.reduce((n,b)=>n+b.texture.image.data.byteLength,0)}))};}
+ function stats(){return {supported,lod:true,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,levels:p.counts||[0,0,0],draws:p.batches.filter(b=>b.mesh.visible).length,frames,bones:p.batches[0].texture.image.width/4,textureBytes:p.batches.reduce((n,b)=>n+b.texture.image.data.byteLength,0)}))};}
  return {attach,create,update,hide,flush,dispose,stats};
 })();

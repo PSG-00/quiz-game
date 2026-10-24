@@ -934,7 +934,7 @@ function animate(frameTime) {
   }
   updateTimerDisplay();
   MobileCrowd.flush();
-  InstancedAvatars.flush();
+  InstancedAvatars.flush(camera,renderer.domElement.clientHeight);
   CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
   sceneAntialias.render(scene, camera);
 }

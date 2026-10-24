@@ -4,7 +4,8 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
  const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,175,175,175,228,228,228,255,255,255]),4,1,THREE.RGBFormat);
  gradient.minFilter=gradient.magFilter=THREE.NearestFilter;gradient.generateMipmaps=false;gradient.needsUpdate=true;
  let ready;function load(){return ready||(ready=new Promise(resolve=>{
-  new THREE.GLTFLoader().load(asset,gltf=>{
+  new THREE.GLTFLoader().load(asset,async gltf=>{
+   try{await AvatarLOD.load(asset,gltf);}catch(e){console.warn('LOD unavailable, original model retained',e);}
    AvatarRig.enhance(gltf.scene);
    const bounds=new THREE.Box3().setFromObject(gltf.scene),height=bounds.max.y-bounds.min.y;
    let bodyReference=0;gltf.scene.traverse(o=>{if(o.userData.body_reference_height)bodyReference=o.userData.body_reference_height;});
