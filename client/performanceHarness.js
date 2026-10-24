@@ -1,8 +1,8 @@
 /* Opt-in deterministic, local-only workload. No room creation or server bots. */
 (()=>{
  const variant=window.PERF_VARIANT||'baseline',active=new URLSearchParams(location.search).get('benchmark')==='100';
- const panel=document.createElement('div');panel.style.cssText='position:fixed;right:8px;top:8px;z-index:10000;background:#172333ed;color:white;padding:8px;border-radius:8px;font:12px system-ui;max-width:270px';
- panel.innerHTML='<b>'+variant+'</b> <span data-live></span><br><button data-measure>30초 측정</button> <button data-save disabled>결과 저장</button> <a href="/performance-compare.html" style="color:#9de7dd">비교 목록</a><div data-result></div>';document.body.append(panel);
+ const panel=document.createElement('details');panel.style.cssText='position:fixed;right:8px;bottom:90px;z-index:10000;background:#172333ed;color:white;padding:8px;border-radius:8px;font:12px system-ui;max-width:270px';
+ panel.innerHTML='<summary style="cursor:pointer"><b>'+variant+'</b> <span data-live></span> · 측정</summary><button data-measure>30초 측정</button> <button data-save disabled>결과 저장</button> <a href="/performance-compare.html" style="color:#9de7dd">비교 목록</a><div data-result></div>';document.body.append(panel);
  const live=panel.querySelector('[data-live]'),result=panel.querySelector('[data-result]'),measure=panel.querySelector('[data-measure]'),save=panel.querySelector('[data-save]');let report=null,ready=!active;
  const delay=ms=>new Promise(r=>setTimeout(r,ms));
  if(active)(async()=>{
