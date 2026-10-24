@@ -9,6 +9,8 @@ const {RoomStore}=require('./RoomStore');
 const {QuizLibrary,userHash}=require('./QuizLibrary');
 const PORT=process.env.PORT||3000;
 const app=express();
+// Immutable client snapshots share this server, WebSocket room and quiz library.
+for(const variant of ['baseline','lod','webgpu'])app.use('/perf/'+variant,express.static(path.join(__dirname,'../artifacts/perf-versions',variant,'client'),{etag:false,lastModified:false,setHeaders:res=>res.setHeader('Cache-Control','no-store')}));
 app.use(express.static(path.join(__dirname,'../client'),{etag:false,lastModified:false,setHeaders:res=>res.setHeader('Cache-Control','no-store')}));
 const disabled=process.env.OX_DISABLE_PERSISTENCE==='1';
 const oldFile=disabled?null:(process.env.OX_DATA_FILE||path.join(__dirname,'../data/rooms.json'));
