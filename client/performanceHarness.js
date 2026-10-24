@@ -12,7 +12,9 @@
   getOrCreatePlayerEntity({i:myClientId,n:'본인',av:'woni',s:0,x:0,z:0,a:true,st:true});
   for(let i=0;i<100;i++)getOrCreatePlayerEntity({i:'perf-'+i,n:'참가자'+i,av:ids[i%6],s:i,x:(i%10-4.5)*1.8,z:(Math.floor(i/10)-4.5)*1.1,a:true,st:true});
   document.getElementById('lobby-overlay').classList.add('hidden');document.getElementById('game-hud').classList.remove('hidden');currentRoomId='local-only-profile';updateCameraForScreen();
+  for(const [id,text] of Object.entries({'hud-alive-count':'생존 101','hud-ghost-count':'유령 0','hud-target-count':'비교 테스트','q-step-info':'100명 렌더링 비교','q-main-text':'동일한 캐릭터 100명과 본인 · 이동 성능 비교'}))document.getElementById(id).textContent=text;
   const start=performance.now();setInterval(()=>{const t=(performance.now()-start)/1000;for(let i=0;i<100;i++){const e=playerEntities.get('perf-'+i);e.targetX=(i%10-4.5)*1.8+Math.sin(t+i)*.5;e.targetZ=(Math.floor(i/10)-4.5)*1.1+Math.cos(t+i)*.4;}},50);
+  while([...playerEntities.values()].some(e=>e.charSprite.userData.pendingModel))await delay(100);
   await delay(10000);ready=true;measure.disabled=false;result.textContent='준비 완료 · 100명 + 본인';
  })();
  setInterval(()=>{if(window.QuizPerformance){const s=QuizPerformance.snapshot();live.textContent=s.fps+' FPS · '+s.drawCalls+' draws';}},500);
