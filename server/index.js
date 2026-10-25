@@ -32,7 +32,9 @@ if(quizFile&&fs.existsSync(seedFile)){
    const codes=new Set((cur.usedCodes||[]).concat(quizzes.map(q=>q.code)));
    let added=false;
    for(const sq of (seed.quizzes||[])){
-    if(!ids.has(sq.id)){quizzes.push(sq);ids.add(sq.id);if(sq.code)codes.add(sq.code);added=true;}
+    const idx=quizzes.findIndex(q=>q.id===sq.id);
+    if(idx===-1){quizzes.push(sq);ids.add(sq.id);if(sq.code)codes.add(sq.code);added=true;}
+    else if((sq.updatedAt||'')>(quizzes[idx].updatedAt||'')){quizzes[idx]=sq;if(sq.code)codes.add(sq.code);added=true;}
    }
    if(added){
     cur.version=cur.version||1;cur.quizzes=quizzes;cur.usedCodes=Array.from(codes);
