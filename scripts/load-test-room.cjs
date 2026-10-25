@@ -1,9 +1,9 @@
-/* Local-only integration load runner. 100 actual WebSocket clients, one server.
-   Normal `npm start` never creates bots or raises normal rooms' 100-player cap. */
+/* Local-only integration load runner. 49 bots leave one human seat in a 50-player room.
+   Normal `npm start` never creates bots. All rooms use the same 50-player cap. */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const WebSocket=require('ws');
 const {RoomManager}=require('../server/RoomManager');
-const PORT=Number(process.env.PORT||3105),COUNT=100,TITLE='[테스트] 봇 100명 · 이동/소수결';
+const PORT=Number(process.env.PORT||3105),COUNT=49,TITLE='[테스트] 50명 방 · 이동/소수결';
 const botIds=new Set(),bots=[],avatars=['woni','liv','minami','may','may-school','zena'];
 const statusFile=path.join(__dirname,'../artifacts/bot-load-test.json');
 let bootstrapClientId=null,roomId=null,room=null,receivedBytes=0,sentInputs=0,stopping=false,bootstrapStarted=false;
@@ -13,7 +13,7 @@ const create=RoomManager.prototype.createRoom;
 RoomManager.prototype.createRoom=function(options,hostId){
  const created=create.call(this,options,hostId);
  if(hostId!==bootstrapClientId||options.title!==TITLE)return created;
- room=created;created.loadTestCapacity=COUNT+1;
+ room=created;
  const add=created.addPlayer.bind(created),remove=created.removePlayer.bind(created);
  created.addPlayer=(id,...args)=>{const hadHuman=[...created.players.keys()].some(id=>!botIds.has(id)),player=add(id,...args);if(!botIds.has(id)&&!hadHuman)created.hostId=id;return player;};
  created.removePlayer=id=>{const wasHost=created.hostId===id;remove(id);if(wasHost){const human=[...created.players.keys()].find(id=>!botIds.has(id));if(human)created.hostId=human;}};
@@ -37,7 +37,7 @@ function connectBot(index){return new Promise((resolve,reject)=>{
   }else if(m.type==='QUIZ_LIST'&&index===0&&!bootstrapStarted){
    bootstrapStarted=true;
    send(ws,{type:'CREATE_ROOM',nickname:'부하봇001',avatarId:'woni',title:TITLE,targetWinners:1,restSeconds:10,questions:[
-    {type:'MINORITY',question:'숫자 안내 없이 적은 쪽을 골라 보세요. 봇 100명이 계속 이동합니다.',timeLimit:60},
+    {type:'MINORITY',question:'숫자 안내 없이 적은 쪽을 골라 보세요. 봇 49명이 계속 이동합니다.',timeLimit:60},
     {type:'OX',question:'리센느 멤버는 5명이다.',answer:'O',timeLimit:40},
     {type:'MINORITY',question:'소수결 패자부활전! 유령 중 적은 쪽이 살아납니다.',isRevival:true,timeLimit:40},
     {type:'MULTIPLE',inputMode:'MOVE',question:'네 구역 이동 테스트: 원하는 보기로 이동해 보세요.',choices:['첫 번째 테스트 구역','두 번째 테스트 구역','세 번째 테스트 구역','네 번째 테스트 구역'],answer:'1',timeLimit:40},

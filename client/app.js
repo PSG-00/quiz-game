@@ -1503,6 +1503,8 @@ function renderRoomList(rooms) {
   grid.className = 'room-grid';
 
   for (const r of rooms) {
+    const capacity = r.maxPlayers || 50;
+    const isFull = r.playerCount >= capacity;
     const card = document.createElement('div');
     card.className = 'room-item';
 
@@ -1514,11 +1516,11 @@ function renderRoomList(rooms) {
       <div class="room-item-title">${escapeHtml(r.title)}</div>
       <div class="room-meta">
         <span class="meta-pill">${stateLabel}</span>
-        <span class="meta-pill">👥 참가자 ${r.playerCount}명</span>
+        <span class="meta-pill">👥 ${r.playerCount}/${capacity}</span>
         <span class="meta-pill">📋 ${r.questionCount}라운드</span>
         <span class="meta-pill">🏆 당첨 목표 ${r.targetWinners}명</span>
       </div>
-      <div class="room-card-actions"><button class="btn btn-primary" onclick="joinRoom('${r.id}')">입장하기 →</button></div>
+      <div class="room-card-actions"><button class="btn btn-primary" ${isFull?'disabled':''} onclick="joinRoom('${r.id}')">${isFull?'정원 마감':'입장하기 →'}</button></div>
     `;
     grid.appendChild(card);
   }

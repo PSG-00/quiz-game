@@ -112,9 +112,9 @@ test('유령은 좁은 하단 구역의 좌우·앞뒤 경계를 넘을 수 없�
  r.movePlayer(p.id,100,100);assert.equal(p.x,7.5);assert.equal(p.z,9.8);
  assert.ok(p.x>=-7.5 && p.x<=7.5);assert.ok(p.z>=8.6 && p.z<=9.8);assert.equal(r.isPlayerOnStage(p),false);
 });
-test('100명의 시작·일반 라운드 전환에서 현재 좌표를 유지',()=>{
- const r=setup({},1,100);
- assert.equal(new Set([...r.players.values()].map(p=>`${p.x},${p.z}`)).size,100);
+test('50명의 시작·일반 라운드 전환에서 현재 좌표를 유지',()=>{
+ const r=setup({},1,50);
+ assert.equal(new Set([...r.players.values()].map(p=>`${p.x},${p.z}`)).size,50);
  r.state='WAITING';r.currentQuestionIndex=-1;r.roundParticipants.clear();
  const before=[...r.players.values()].map((p,i)=>{p.x=-8+(i%10)*1.6;p.z=-5+Math.floor(i/10);return{id:p.id,x:p.x,z:p.z};});
  r.startGame();clearTimeout(r.timerHandle);

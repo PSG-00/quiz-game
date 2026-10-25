@@ -10,6 +10,7 @@ const SPECTATOR_MIN_Z = 8.6;
 const SPECTATOR_MAX_Z = 9.8;
 const SPECTATOR_HALF_W = 7.5;
 const JUDGE_DURATION_MS=3000;
+const MAX_ROOM_PLAYERS=50;
 
 // 기본 제공 퀴즈 프리셋 (방 생성 시 바로 쓰거나 수정 가능)
 const DEFAULT_QUIZ_LIST = [
@@ -80,6 +81,7 @@ class Room {
     this.ownerTokenHash = options.ownerTokenHash || null;
     this.createdAt = options.createdAt || new Date().toISOString();
     this.isDemo = false;
+    this.maxPlayers = MAX_ROOM_PLAYERS;
     this.targetWinners = clamp(parseInt(options.targetWinners, 10) || 2, 1, 100);
     this.restSeconds=Number.isInteger(options.restSeconds)?clamp(options.restSeconds,0,60):5;
     this.zeroSurvivorPolicy = 'PREVIOUS_SURVIVORS'; // 전원 오답이면 직전 생존자를 기준으로 종료·추첨
@@ -147,6 +149,9 @@ class Room {
   }
 
   addPlayer(id, name, ws = null, avatarId = 'default') {
+    if (!this.players.has(id) && this.players.size >= this.maxPlayers) {
+      throw new Error(`이 방은 최대 ${this.maxPlayers}명까지 입장할 수 있어요.`);
+    }
     const spriteSeed = Math.floor(Math.random() * 12);
     const alive = this.state === 'WAITING';
 
@@ -572,6 +577,8 @@ class Room {
       roomId: this.id,
       gameId: this.gameId,
       title: this.title,
+      playerCount: this.players.size,
+      maxPlayers: this.maxPlayers,
       hostId: this.hostId,
       state: this.state,
       targetWinners: this.targetWinners,
@@ -640,7 +647,7 @@ class RoomManager {
   }
   createRoom(options,hostId){const room=new Room(options,hostId);this.rooms.set(room.id,room);return room;}
   getRoom(id){return this.rooms.get(id);}
-  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,playerCount:room.players.size,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
+  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,playerCount:room.players.size,maxPlayers:room.maxPlayers,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
   closeRoom(room){
     if(!room||this.rooms.get(room.id)!==room)return;
     if(room.timerHandle)clearTimeout(room.timerHandle);
@@ -649,4 +656,4 @@ class RoomManager {
   cleanupEmptyRooms(){for(const room of this.rooms.values())if(!room.players.size)this.closeRoom(room);}
   close(){if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values())if(room.timerHandle)clearTimeout(room.timerHandle);}
 }
-module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W};
+module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS};
