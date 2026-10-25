@@ -132,7 +132,7 @@ wss.on('connection',ws=>{
  }
  function issueSession(player){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token);}
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
- send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true},rooms:roomManager.getRoomListSummary()});
+ send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',raw=>{
   if(!limits.allow('all',60,120))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -174,6 +174,9 @@ wss.on('connection',ws=>{
      checkCodeLimit(ws._socket.remoteAddress);
      send(ws,{type:'QUIZ_LOADED',quiz:library.getByCode(msg.code,ownerHash),byCode:true,requestId:msg.requestId});break;
     case 'GET_ROOMS':send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
+    case 'GET_ROOM_STATE':
+     if(currentRoom&&msg.roomId===currentRoom.id&&limits.allow('stateSync',1,2))currentRoom.broadcastRoomEvent({},ws);
+     break;
     case 'RESUME_ROOM':{
      if(currentRoom)break;
      const room=roomManager.getRoom(msg.roomId),hash=resumeHash(msg.resumeToken);

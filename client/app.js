@@ -39,6 +39,7 @@ let builderQuestions = [];
 // 플레이어 렌더링 엔티티 맵
 const playerEntities = new Map();
 const worldUpdates = WorldUpdates.create();
+const roomStateSync=RoomStateSync.create();
 
 // 내 캐릭터 로컬 위치
 let myPos = { x: -6, z: 0 };
@@ -1001,7 +1002,7 @@ function connectWebSocket() {
         myClientId=msg.clientId;
         restoredSubmission=msg.resumed&&msg.hasSubmitted?msg:null;
         if(msg.resumeToken)saveResumeSession({roomId:msg.roomId,resumeToken:msg.resumeToken});
-        worldUpdates.reset();
+        worldUpdates.reset();roomStateSync.reset();
         lastSentPosKey='';lastSentPosTime=0;
         creatingRoomRequestId=null;updateSaveButtons();
         cameraFollow.initialized=false;cameraFollow.x=0;cameraFollow.targetX=0;
@@ -1024,7 +1025,13 @@ function connectWebSocket() {
         if(msg.roomId!==currentRoomId)break;
         roomState = msg;
         serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
-        handleRoomStateUpdate(msg);
+        try{
+          handleRoomStateUpdate(msg);
+          roomStateSync.accept(msg.stateVersion);
+        }catch(error){
+          renderedPhaseKey=null;roomStateSync.invalidate();
+          console.warn('게임 화면 갱신 실패, 서버 상태 재확인:',error);
+        }
         if(restoredSubmission){
           if(msg.gameId===restoredSubmission.gameId&&msg.roundId===restoredSubmission.roundId&&msg.state==='QUESTION'){
             document.getElementById('short-answer-input').value=restoredSubmission.ownAnswer||'';
@@ -1040,6 +1047,7 @@ function connectWebSocket() {
       case 'WORLD_DELTA': {
         if(!currentRoomId)break;
         if(msg.roomId&&msg.roomId!==currentRoomId)break;
+        roomStateSync.observe(msg.stateVersion);
         const players=worldUpdates.apply(msg);
         if(players)handleWorldTick(players);
         break;
@@ -1210,7 +1218,6 @@ function handleRoomStateUpdate(stateMsg) {
   // inputs mounted and untouched so mobile keyboards and IME composition stay open.
   const phaseKey = JSON.stringify([stateMsg.roomId, stateMsg.gameId, stateMsg.roundId, stateMsg.state, q?.index, stateMsg.stateEndTime]);
   const phaseChanged = phaseKey !== renderedPhaseKey;
-  renderedPhaseKey = phaseKey;
   if (phaseChanged&&stateMsg.state!=='BREAK') closeChatPopup();
 
   // 사회자 말풍선 업데이트
@@ -1357,6 +1364,7 @@ function handleRoomStateUpdate(stateMsg) {
   if (phaseChanged) myMoveTarget = null;
   updateQuestionReadability();
   requestAnimationFrame(updateCameraForScreen);
+  renderedPhaseKey=phaseKey;
   for (const ent of playerEntities.values()) {
     ent.lastBadgeKey = '';
     updatePlayerOverheadIfNeeded(ent);
@@ -1395,13 +1403,17 @@ window.cycleSpectator=function(direction){
 
 function updateTimerDisplay() {
   const timerEl = document.getElementById('q-timer');
+  const estimatedServerNow = Date.now() - serverTimeOffset;
+  if(currentRoomId&&serverFeatures.stateSync&&ws?.readyState===WebSocket.OPEN&&roomStateSync.due(roomState,estimatedServerNow,performance.now())){
+    ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));
+  }
   if (!roomState || roomState.state === 'WAITING' || roomState.state === 'ENDED') {
     timerEl.textContent = '⏱ 대기';
     timerEl.classList.remove('urgent');
     return;
   }
 
-  const estimatedServerNow = Date.now() - serverTimeOffset;
+
   const remainMs = Math.max(0, (roomState.stateEndTime || 0) - estimatedServerNow);
   const sec = Math.ceil(remainMs / 1000);
   timerEl.textContent = `⏱ ${sec}초`;
@@ -1517,7 +1529,7 @@ function returnToLobby({preserveResume=false}={}){
  resetJoystick();
  closeChatPopup();
  currentRoomId=null;roomState=null;renderedPhaseKey=null;myMoveTarget=null;
- worldUpdates.reset();
+ worldUpdates.reset();roomStateSync.reset();
  lastSentPosKey='';lastSentPosTime=0;
  document.body.classList.remove('answer-mode','multiple-mode','move-answer-mode','break-mode');
  document.getElementById('game-hud').classList.add('hidden');
@@ -1714,3 +1726,8 @@ function updateQuestionScrollHint() {
 }
 document.getElementById('q-main-text').addEventListener('scroll', updateQuestionScrollHint);
 new ResizeObserver(updateQuestionScrollHint).observe(document.getElementById('q-main-text'));
+
+// Mobile browsers may suspend a tab without closing its socket.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)roomStateSync.invalidate();});
+window.addEventListener('pageshow',()=>roomStateSync.invalidate());
+window.addEventListener('online',()=>roomStateSync.invalidate());

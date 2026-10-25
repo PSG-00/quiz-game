@@ -2,6 +2,13 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {WorldStream}=require('../server/WorldStream'),{create}=require('../client/worldUpdates');
 const player=(i,x=0)=>({i,n:'참가자',x,z:0,a:1,st:1,av:'liv',h:0,e:0,r:null});
 const socket=(delta=true)=>({readyState:1,bufferedAmount:0,worldDeltaEnabled:delta,messages:[],send(raw){this.messages.push(JSON.parse(raw));}});
+
+test('좌표 변화가 없어도 단계 버전 변경은 알리고 이후 정지는 방송하지 않음',()=>{
+ const stream=new WorldStream(),ws=socket();stream.publish('r',[player('a')],[ws],10000,1);
+ stream.publish('r',[player('a')],[ws],10066,2);
+ assert.equal(ws.messages.length,2);assert.equal(ws.messages[1].stateVersion,2);assert.deepEqual(ws.messages[1].p,[]);
+ stream.publish('r',[player('a')],[ws],10132,2);assert.equal(ws.messages.length,2);
+});
 test('최초 전체 상태 이후 변경된 좌표만 보내고 정지는 방송하지 않음',()=>{
  const stream=new WorldStream(),ws=socket(),legacy=socket(false),state=create();
  stream.publish('r',[player('a'),player('b')],[ws,legacy],10000);assert.equal(ws.messages[0].type,'WORLD_TICK');state.apply(ws.messages[0]);

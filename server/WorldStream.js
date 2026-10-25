@@ -1,7 +1,8 @@
 // One room diff per tick, shared by capable clients. Older clients retain snapshots.
 class WorldStream {
   constructor(){this.previous=new Map();this.sequence=0;this.lastSnapshotAt=0;}
-  publish(roomId,players,connections,now=Date.now()){
+  publish(roomId,players,connections,now=Date.now(),stateVersion){
+    const phaseChanged=stateVersion!==this.stateVersion;this.stateVersion=stateVersion;
     const current=new Map(),changed=[],removed=[];
     for(const p of players){
       current.set(p.i,p);const previous=this.previous.get(p.i);
@@ -20,10 +21,10 @@ class WorldStream {
       // a complete snapshot once the queue drains; game/chat events are untouched.
       if(ws.bufferedAmount>256*1024){ws.worldSnapshotRoom=null;continue;}
       if(!ws.worldDeltaEnabled||refresh||ws.worldSnapshotRoom!==roomId){
-        full??=JSON.stringify({type:'WORLD_TICK',roomId,seq:sequence,p:players});
+        full??=JSON.stringify({type:'WORLD_TICK',roomId,seq:sequence,stateVersion,p:players});
         ws.send(full);ws.worldSnapshotRoom=roomId;
-      }else if(changed.length||removed.length){
-        delta??=JSON.stringify({type:'WORLD_DELTA',roomId,seq:sequence,p:changed,removed});ws.send(delta);
+      }else if(changed.length||removed.length||phaseChanged){
+        delta??=JSON.stringify({type:'WORLD_DELTA',roomId,seq:sequence,stateVersion,p:changed,removed});ws.send(delta);
       }
     }
   }

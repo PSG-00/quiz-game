@@ -609,7 +609,13 @@ class Room {
     if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.stringify({type: 'ANSWER_ACK', answer: text,roomId:this.id,gameId:this.gameId,roundId:this.roundId}));
   }
 
-  broadcastRoomEvent(extra = {}) {
+  getStateVersion(){
+    const key=JSON.stringify([this.gameId,this.roundId,this.state,this.currentQuestionIndex,this.stateEndTime]);
+    if(key!==this.stateVersionKey){this.stateVersionKey=key;this.stateVersion=(this.stateVersion||0)+1;}
+    return this.stateVersion;
+  }
+
+  broadcastRoomEvent(extra = {}, recipient = null) {
     const q = this.getCurrentQuestion();
     const publicQuestion = q
       ? {
@@ -627,6 +633,7 @@ class Room {
 
     const payload = JSON.stringify({
       type: 'ROOM_STATE',
+      stateVersion:this.getStateVersion(),
       roomId: this.id,
       gameId: this.gameId,
       roundId:this.roundId,
@@ -652,7 +659,8 @@ class Room {
       ...extra
     });
 
-    this.sendToAll(payload);
+    if(recipient){if(recipient.readyState===1)recipient.send(payload);}
+    else this.sendToAll(payload);
   }
 
   broadcastWorldTick() {
@@ -682,7 +690,7 @@ class Room {
       });
     }
 
-    this.worldStream.publish(this.id,playersCompact,[...this.players.values()].map(p=>p.ws));
+    this.worldStream.publish(this.id,playersCompact,[...this.players.values()].map(p=>p.ws),Date.now(),this.getStateVersion());
   }
 
   sendToAll(jsonStr) {
