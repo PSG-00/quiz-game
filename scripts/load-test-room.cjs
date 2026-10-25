@@ -6,7 +6,7 @@ const worldUpdates=require('../client/worldUpdates').create();
 const {RoomManager}=require('../server/RoomManager');
 const PORT=Number(process.env.PORT||3105),COUNT=49,TITLE='[테스트] 50명 방 · 이동/소수결';
 const botIds=new Set(),bots=[],avatars=['woni','liv','minami','may','may-school','zena'];
-const statusFile=path.join(__dirname,'../artifacts/bot-load-test.json');
+const statusFile=process.env.LOAD_TEST_STATUS_FILE||path.join(__dirname,'../artifacts/bot-load-test.json');
 let bootstrapClientId=null,roomId=null,room=null,receivedBytes=0,sentInputs=0,stopping=false,bootstrapStarted=false;
 let interval,lastStats=Date.now(),lastBytes=0;
 // A test harness around the normal room implementation; never a client option.
@@ -15,9 +15,7 @@ RoomManager.prototype.createRoom=function(options,hostId){
  const created=create.call(this,options,hostId);
  if(hostId!==bootstrapClientId||options.title!==TITLE)return created;
  room=created;
- const add=created.addPlayer.bind(created),remove=created.removePlayer.bind(created);
- created.addPlayer=(id,...args)=>{const hadHuman=[...created.players.keys()].some(id=>!botIds.has(id)),player=add(id,...args);if(!botIds.has(id)&&!hadHuman)created.hostId=id;return player;};
- created.removePlayer=id=>{const wasHost=created.hostId===id;remove(id);if(wasHost){const human=[...created.players.keys()].find(id=>!botIds.has(id));if(human)created.hostId=human;}};
+ created.testBotIds=botIds;
  return created;
 };
 function send(ws,m){if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<128*1024)ws.send(JSON.stringify(m));}
@@ -49,7 +47,7 @@ function connectBot(index){return new Promise((resolve,reject)=>{
   }else if(m.type==='ROOM_STATE'){
    bot.state=m;
    const q=m.currentQuestion,key=`${m.gameId}:${q?.index}`;
-   if(m.state==='QUESTION'&&bot.answerKey!==key){bot.answerKey=key;if(q.type==='SHORT')send(ws,{type:'SUBMIT_SHORT',answer:index%3?'서울':'부산'});if(q.type==='MULTIPLE'&&q.inputMode==='BUTTON')send(ws,{type:'SUBMIT_MULTIPLE',answer:String(index%4+1)});}
+   if(m.state==='QUESTION'&&bot.answerKey!==key){bot.answerKey=key;const context={gameId:m.gameId,roundId:m.roundId};if(q.type==='SHORT')send(ws,{type:'SUBMIT_SHORT',answer:index%3?'서울':'부산',...context});if(q.type==='MULTIPLE'&&q.inputMode==='BUTTON')send(ws,{type:'SUBMIT_MULTIPLE',answer:String(index%4+1),...context});}
   }else if(m.type==='WORLD_TICK'||m.type==='WORLD_DELTA'){const list=worldUpdates.apply(m);if(list){const players=new Map(list.map(p=>[p.i,p]));for(const other of bots)other.player=players.get(other.id);}}
   else if(m.type==='ERROR'){clearTimeout(timeout);reject(new Error(m.message));}
  });
@@ -65,7 +63,9 @@ async function start(){
  await connectBot(0);
  for(let i=1;i<COUNT;i++){await connectBot(i);await new Promise(r=>setTimeout(r,25));}
  interval=setInterval(()=>{
-  const t=Date.now()/1000;for(const bot of bots){const p=bot.player;if(!p)continue;const stage=!!p.st,x=Math.sin(t*.35+bot.index*2.399)*8,z=stage?Math.cos(t*.27+bot.index*1.71)*4.8:8.75+(Math.sin(t*.5+bot.index)+1)*.45;send(bot.ws,{type:'MOVE',x,z});sentInputs++;}
+  const t=Date.now()/1000;for(const bot of bots){const p=bot.player;if(!p)continue;const stage=!!p.st,targetX=Math.sin(t*.35+bot.index*2.399)*8,targetZ=stage?Math.cos(t*.27+bot.index*1.71)*4.8:8.75+(Math.sin(t*.5+bot.index)+1)*.45;
+   const dx=targetX-p.x,dz=targetZ-p.z,distance=Math.hypot(dx,dz),step=Math.min(1,.7/Math.max(.0001,distance));
+   send(bot.ws,{type:'MOVE',x:p.x+dx*step,z:p.z+dz*step});sentInputs++;}
  },100);
  writeStats();setInterval(writeStats,5000).unref();console.log(`LOAD_TEST_READY ${COUNT} bots · ${TITLE} · http://localhost:${PORT}/ · 첫 실제 입장자가 방장`);
 }

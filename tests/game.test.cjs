@@ -9,7 +9,7 @@ function setup(q={},target=2,count=3){
 }
 function judge(r){r.judgeQuestion();clearTimeout(r.timerHandle);}
 test('발 중심 경계: x=0은 X, 2×2 네 구역 ID 일치',()=>{
- assert.equal(computeZone('OX',-.001),'O');assert.equal(computeZone('OX',0),'X');
+ assert.equal(computeZone('OX',-.001),'X');assert.equal(computeZone('OX',-.01),'O');assert.equal(computeZone('OX',0),'X');
  assert.deepEqual([[-1,-1],[0,-1],[-1,0],[0,0]].map(([x,z])=>computeZone('MULTIPLE',x,z)),['1','2','3','4']);
 });
 test('일반 유령은 관전 구역에만 머무르고 제출할 수 없음',()=>{

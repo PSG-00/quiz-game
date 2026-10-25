@@ -648,6 +648,8 @@ function getOrCreatePlayerEntity(p) {
 function computeOverheadBadge(entity) {
   const q = roomState && roomState.currentQuestion;
   const state = roomState ? roomState.state : 'WAITING';
+  if(entity.connected===false)return {text:'재접속 대기',theme:'GHOST'};
+  if(entity.eligible===false)return {text:'관전',theme:'GHOST'};
 
   if (state === 'JUDGE' && entity.lastResult === 'REVIVED') {
     return { text: '✨ 부활!', theme: 'REVIVED' };
@@ -818,11 +820,11 @@ function animate(frameTime) {
       const qType = (roomState && roomState.currentQuestion) ? roomState.currentQuestion.type : 'OX';
       if (myEntity.onStage) {
         if(qType==='MINORITY'){
-          myEntity.zoneId=myPos.x<0?'LEFT':'RIGHT';
+          myEntity.zoneId=ArenaRules.zone('MINORITY',myPos.x,myPos.z);
         } else if (qType === 'OX') {
-          myEntity.zoneId = myPos.x < 0 ? 'O' : 'X';
+          myEntity.zoneId = ArenaRules.zone('OX',myPos.x,myPos.z);
         } else if (qType === 'MULTIPLE') {
-          myEntity.zoneId = String((myPos.z >= 0 ? 2 : 0) + (myPos.x >= 0 ? 2 : 1));
+          myEntity.zoneId = ArenaRules.zone('MULTIPLE',myPos.x,myPos.z);
           highlightSelectedMultiBtn(myEntity.zoneId);
         }
       }
@@ -955,6 +957,11 @@ function animate(frameTime) {
 requestAnimationFrame(animate);
 
 // ==================== 5. 웹소켓 통신 ====================
+let resumeSession=null;
+let restoredSubmission=null;
+try{resumeSession=JSON.parse(sessionStorage.getItem('ox-room-session')||'null');}catch{}
+function saveResumeSession(value){resumeSession=value;try{if(value)sessionStorage.setItem('ox-room-session',JSON.stringify(value));else sessionStorage.removeItem('ox-room-session');}catch{}}
+function answerContext(){return {gameId:roomState?.gameId,roundId:roomState?.roundId};}
 function connectWebSocket() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${location.host}`;
@@ -969,6 +976,7 @@ function connectWebSocket() {
         serverFeatures=msg.features||{};renderQuizBuilder();
         libraryReady=false;
         ws.send(JSON.stringify({type:'AUTH_LIBRARY',token:libraryToken,legacyRoomTokens}));
+        if(resumeSession?.roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,worldDelta:true}));
         renderRoomList(msg.rooms || []);
         break;
       }
@@ -985,6 +993,9 @@ function connectWebSocket() {
       }
 
       case 'JOINED_ROOM': {
+        myClientId=msg.clientId;
+        restoredSubmission=msg.resumed&&msg.hasSubmitted?msg:null;
+        if(msg.resumeToken)saveResumeSession({roomId:msg.roomId,resumeToken:msg.resumeToken});
         worldUpdates.reset();
         lastSentPosKey='';lastSentPosTime=0;
         creatingRoomRequestId=null;updateSaveButtons();
@@ -995,11 +1006,28 @@ function connectWebSocket() {
         requestAnimationFrame(updateCameraForScreen);
         break;
       }
+      case 'RESUME_REJECTED':
+        saveResumeSession(null);returnToLobby();setQuizStatus('복귀할 수 없어요. 진행 중인 방에는 관전으로 입장할 수 있어요.');break;
+      case 'NOTICE':setQuizStatus(msg.message);break;
+      case 'MOVE_CORRECTION':{
+        if(msg.roomId!==currentRoomId)break;
+        myPos={x:msg.x,z:msg.z};myMoveTarget=null;
+        lastSentPosKey='';
+        break;
+      }
       case 'ROOM_STATE': {
         if(msg.roomId!==currentRoomId)break;
         roomState = msg;
         serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
         handleRoomStateUpdate(msg);
+        if(restoredSubmission){
+          if(msg.gameId===restoredSubmission.gameId&&msg.roundId===restoredSubmission.roundId&&msg.state==='QUESTION'){
+            document.getElementById('short-answer-input').value=restoredSubmission.ownAnswer||'';
+            highlightSelectedMultiBtn(restoredSubmission.ownAnswer);
+            const preview=document.getElementById('my-submitted-preview');preview.textContent=`제출한 답안: ${restoredSubmission.ownAnswer}`;preview.classList.remove('hidden');
+          }
+          restoredSubmission=null;
+        }
         break;
       }
 
@@ -1025,6 +1053,7 @@ function connectWebSocket() {
       }
 
       case 'ANSWER_ACK': {
+        if(msg.roomId!==currentRoomId||msg.gameId!==roomState?.gameId||msg.roundId!==roomState?.roundId)break;
         const mine = playerEntities.get(myClientId);
         if (mine) { mine.hasSubmitted = true; mine.isEditing = false; }
         highlightSelectedMultiBtn(msg.answer);
@@ -1045,9 +1074,10 @@ function connectWebSocket() {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
-    libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();returnToLobby();
+    if(event.code===4001)saveResumeSession(null);
+    libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();returnToLobby({preserveResume:true});
     setTimeout(connectWebSocket, 2000);
   };
 }
@@ -1074,8 +1104,7 @@ function handleWorldTick(compactList) {
 
   for (const p of compactList) {
     seenIds.add(p.i);
-    if (p.a) aliveCount++;
-    else ghostCount++;
+    if(p.el!==0){if (p.a) aliveCount++;else ghostCount++;}
 
     const entity = getOrCreatePlayerEntity(p);
     const avatarId=AvatarCatalog.normalize(p.av);
@@ -1091,6 +1120,7 @@ function handleWorldTick(compactList) {
     const roleChanged = entity.onStage !== Boolean(p.st);
     if(roleChanged||Math.hypot(p.x-entity.x,p.z-entity.z)>8)entity.motion.teleporting=true;
     entity.alive = Boolean(p.a);
+    entity.eligible=p.el!==0;entity.connected=p.c!==0;
     entity.onStage = Boolean(p.st);
     entity.targetY = p.st ? STAGE_HEIGHT : 0;
     entity.isEditing = Boolean(p.e);
@@ -1105,6 +1135,8 @@ function handleWorldTick(compactList) {
     if (p.i === myClientId) {
       const label = document.getElementById('local-answer-state');
       if (label) label.textContent = p.e ? '수정 중 · 다시 제출해 주세요' : p.h ? '✓ 제출 완료 · 마감 전 변경 가능' : '나만 보이는 비공개 답안';
+      const spectatorBadge=document.getElementById('spectator-status');
+      if(spectatorBadge){spectatorBadge.hidden=p.el!==0;spectatorBadge.textContent='관전 중 · 다음 게임부터 참여 가능';}
     }
 
     if (p.i !== myClientId) {
@@ -1168,7 +1200,7 @@ function handleRoomStateUpdate(stateMsg) {
   const q = stateMsg.currentQuestion;
   // Membership updates repeat ROOM_STATE for the same question. Keep focused
   // inputs mounted and untouched so mobile keyboards and IME composition stay open.
-  const phaseKey = JSON.stringify([stateMsg.roomId, stateMsg.gameId, stateMsg.state, q?.index, stateMsg.stateEndTime]);
+  const phaseKey = JSON.stringify([stateMsg.roomId, stateMsg.gameId, stateMsg.roundId, stateMsg.state, q?.index, stateMsg.stateEndTime]);
   const phaseChanged = phaseKey !== renderedPhaseKey;
   renderedPhaseKey = phaseKey;
   if (phaseChanged&&stateMsg.state!=='BREAK') closeChatPopup();
@@ -1357,7 +1389,7 @@ window.moveToLane = function (laneNum) {
   if (!canAnswer()) return;
   const q = roomState.currentQuestion;
   if (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE') {
-    ws.send(JSON.stringify({type: 'SUBMIT_MULTIPLE', answer: String(laneNum)}));
+    ws.send(JSON.stringify({type: 'SUBMIT_MULTIPLE', answer: String(laneNum),...answerContext()}));
   } else {
     myMoveTarget = { x: [1, 3].includes(laneNum) ? -5 : 5, z: laneNum <= 2 ? -3 : 3 };
   }
@@ -1379,7 +1411,7 @@ window.submitShortAnswer = function () {
   const input = document.getElementById('short-answer-input');
   const val = input.value.trim();
   if (!val || !ws || !canAnswer()) return;
-  ws.send(JSON.stringify({ type: 'SUBMIT_SHORT', answer: val }));
+  ws.send(JSON.stringify({ type: 'SUBMIT_SHORT', answer: val,...answerContext() }));
   input.blur();
 
   const preview = document.getElementById('my-submitted-preview');
@@ -1439,7 +1471,8 @@ window.resetGame = function () {
   if (ws) ws.send(JSON.stringify({ type: 'RESET_GAME' }));
 };
 
-function returnToLobby(){
+function returnToLobby({preserveResume=false}={}){
+ if(!preserveResume)saveResumeSession(null);
  resetJoystick();
  closeChatPopup();
  currentRoomId=null;roomState=null;renderedPhaseKey=null;myMoveTarget=null;
@@ -1539,7 +1572,7 @@ function renderRoomList(rooms) {
       <div class="room-item-title">${escapeHtml(r.title)}</div>
       <div class="room-meta">
         <span class="meta-pill">${stateLabel}</span>
-        <span class="meta-pill">👥 ${r.playerCount}/${capacity}</span>
+        <span class="meta-pill">👥 ${r.playerCount}/${capacity}${r.reservedCount?` · 복귀 예약 ${r.reservedCount}`:''}</span>
         <span class="meta-pill">📋 ${r.questionCount}라운드</span>
         <span class="meta-pill">🏆 당첨 목표 ${r.targetWinners}명</span>
       </div>
@@ -1598,7 +1631,7 @@ function escapeHtml(str) {
 document.getElementById('short-answer-input').addEventListener('input', () => {
   const field=document.getElementById('short-answer-input');field.value=Array.from(field.value).slice(0,QuizLimits.ANSWER).join('');
   if (!canAnswer()) return;
-  ws.send(JSON.stringify({type: 'ANSWER_EDITING'}));
+  ws.send(JSON.stringify({type: 'ANSWER_EDITING',...answerContext()}));
   document.getElementById('my-submitted-preview').textContent = '수정 중 · 다시 제출하면 답안이 변경돼요';
 });
 

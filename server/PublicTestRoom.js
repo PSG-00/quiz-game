@@ -21,7 +21,7 @@ function enablePublicTestRoom(manager,{startLoop=true}={}){
   tick(now=Date.now()){
    if(controller.closed)return;
    // The permanent test room consumes no bot movement work while nobody watches.
-   if(![...room.players.keys()].some(id=>!room.testBotIds.has(id)))return;
+   if(![...room.players.values()].some(p=>!room.testBotIds.has(p.id)&&p.connected!==false))return;
    const t=now/1000,q=room.getCurrentQuestion(),key=room.gameId+':'+q?.index;
    for(const bot of bots){
     const p=bot.player,stage=room.isPlayerOnStage(p),x=Math.sin(t*.35+bot.index*2.399)*8,z=stage?Math.cos(t*.27+bot.index*1.71)*4.8:8.75+(Math.sin(t*.5+bot.index)+1)*.45;

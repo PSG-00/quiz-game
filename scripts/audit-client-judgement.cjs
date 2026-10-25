@@ -1,0 +1,70 @@
+// Local-only browser reproduction of predicted UI versus authoritative judgement.
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),WebSocket=require('ws'),{fork}=require('node:child_process');
+const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/psg00/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const port=Number(process.env.AUDIT_PORT||3133),base='http://127.0.0.1:'+port,requests=new Map();let child,browser,guest,serial=0;
+const mobile=process.env.AUDIT_MOBILE==='1',suffix=mobile?'-mobile':'',viewport=mobile?{width:390,height:844}:{width:1280,height:800};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(let i=0;i<600;i++){try{const value=await fn();if(value)return value;}catch{}await sleep(20);}throw Error('Audit timeout');}
+function control(command,data={}){return new Promise((resolve,reject)=>{const id=++serial;requests.set(id,{resolve,reject});child.send({id,command,...data});});}
+(async()=>{const result={viewport,device:mobile?'desktop Chromium mobile viewport; not a physical phone':'desktop Chromium'};fs.mkdirSync('artifacts',{recursive:true});try{
+ child=fork(path.join(__dirname,'lib/auditServer.cjs'),[],{env:{...process.env,PORT:String(port)},silent:true});child.stdout.resume();child.stderr.resume();child.on('message',m=>{const q=requests.get(m.id);if(q){requests.delete(m.id);m.error?q.reject(Error(m.error)):q.resolve(m.result);}});
+ await until(async()=>{try{return(await fetch(base+'/api/rooms')).ok;}catch{return false;}});
+ browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await page.goto(base);await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded),{}, {timeout:120000});
+ await page.evaluate(()=>ws.send(JSON.stringify({type:'CREATE_ROOM',title:'판정 격리 점검',nickname:'판정 점검',avatarId:'woni',worldDelta:true,targetWinners:1,questions:[{type:'OX',question:'정답은 O입니다',answer:'O',timeLimit:15}]})));
+ await page.waitForFunction(()=>currentRoomId&&roomState?.state==='WAITING');const roomId=await page.evaluate(()=>currentRoomId),hostId=await page.evaluate(()=>myClientId);
+ guest=new WebSocket('ws://127.0.0.1:'+port);let guestId;await new Promise((resolve,reject)=>{guest.on('error',reject);guest.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='WELCOME'){guestId=m.clientId;guest.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'다른 참가자',worldDelta:true}));}if(m.type==='JOINED_ROOM')resolve();});});
+ await page.waitForFunction(()=>playerEntities.size===2);
+ await control('question',{roomId,positions:{[hostId]:{x:1,z:0},[guestId]:{x:-2,z:0}}});await page.waitForFunction(()=>roomState?.state==='QUESTION');
+ await page.evaluate(()=>{myPos.x=-.001;myPos.z=0;myMoveTarget=null;lastSentPosKey='';lastSentPosTime=0;});
+ const rounded=await until(async()=>{const r=await control('snapshot',{roomId});const p=r.players.find(p=>p.id===hostId);return p.x===0?p:null;});
+ const local=await until(()=>page.evaluate(()=>{const e=playerEntities.get(myClientId);return e.zoneId==='X'&&myPos.x===-.001?{x:myPos.x,renderedX:e.x,zone:e.zoneId,badge:computeOverheadBadge(e)}:null;}));
+ await page.screenshot({path:'artifacts/audit-rounding-before'+suffix+'.png'});
+ const judged=await control('judge',{roomId}),victim=judged.players.find(p=>p.id===hostId);assert.equal(victim.alive,false);
+ assert.equal(local.zone,'X');result.rounding={status:'PASS',client:local,server:{x:rounded.x,zone:rounded.x<0?'O':'X'},outcome:victim.result};
+ await page.waitForFunction(()=>!playerEntities.get(myClientId).alive);await page.screenshot({path:'artifacts/audit-rounding-after'+suffix+'.png'});
+ await page.evaluate(()=>{window.originalAuditSend=ws.send.bind(ws);ws.send=raw=>{if(JSON.parse(raw).type!=='MOVE')originalAuditSend(raw);};});
+ await sleep(100);
+ await control('question',{roomId,positions:{[hostId]:{x:2,z:0},[guestId]:{x:-2,z:0}}});await page.waitForFunction(()=>roomState?.state==='QUESTION'&&playerEntities.get(myClientId).onStage);await sleep(100);
+ await page.evaluate(()=>{
+  ws.send=raw=>{const m=JSON.parse(raw);if(m.type==='MOVE')setTimeout(()=>originalAuditSend(raw),200);else originalAuditSend(raw);};
+  myPos.x=-2;myPos.z=0;myMoveTarget=null;lastSentPosKey='';lastSentPosTime=0;
+ });
+ await page.waitForFunction(()=>playerEntities.get(myClientId).zoneId==='O');
+ const beforeDelay=(await control('snapshot',{roomId})).players.find(p=>p.id===hostId);assert.equal(beforeDelay.x,2);
+ const predicted=await page.evaluate(()=>({x:myPos.x,zone:playerEntities.get(myClientId).zoneId}));
+ const expired=await control('judge',{roomId});assert.equal(expired.players.find(p=>p.id===hostId).alive,false);
+ result.inFlightMovement={status:'PASS_SERVER_AUTHORITY',delayMs:200,client:predicted,serverBeforeDeadline:{x:beforeDelay.x,zone:'X'},outcome:expired.players.find(p=>p.id===hostId).result};
+ await sleep(250);await page.evaluate(()=>ws.send=originalAuditSend);
+ const short=await control('question',{roomId,question:{type:'SHORT',answer:'서울',timeLimit:60},duration:60000});
+ await page.waitForFunction(()=>roomState?.state==='QUESTION'&&roomState.currentQuestion.type==='SHORT'&&playerEntities.get(myClientId).onStage);
+ await page.evaluate(()=>{document.getElementById('short-answer-input').value='서울';submitShortAnswer();});
+ await until(async()=>(await control('snapshot',{roomId})).players.find(p=>p.id===hostId).submitted);
+ await page.evaluate(()=>ws.close());await page.waitForFunction(()=>currentRoomId===null);
+ await page.waitForFunction(id=>currentRoomId&&myClientId===id&&playerEntities.get(id)?.hasSubmitted,hostId,{timeout:30000});
+ assert.equal(await page.locator('#short-answer-input').inputValue(),'서울');
+ await page.reload();await page.waitForFunction(id=>currentRoomId&&myClientId===id&&playerEntities.get(id)?.hasSubmitted,hostId,{timeout:120000});
+ assert.equal(await page.locator('#short-answer-input').inputValue(),'서울');
+ result.reconnect={status:'PASS',samePlayerId:true,answer:'서울',socketReconnect:true,pageReload:true};
+ const spectator=await browser.newPage({viewport,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+ await spectator.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await spectator.goto(base);await spectator.waitForFunction(()=>libraryReady);
+ await spectator.evaluate(rid=>ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:rid,nickname:'늦게 온 관전자',worldDelta:true})),roomId);
+ await spectator.waitForFunction(()=>currentRoomId&&playerEntities.get(myClientId)?.eligible===false);
+ assert.equal(await spectator.evaluate(()=>canAnswer()),false);await spectator.locator('#spectator-status').waitFor({state:'visible'});
+ assert.equal(await spectator.evaluate(()=>computeOverheadBadge(playerEntities.get(myClientId)).text),'관전');
+ result.spectator={status:'PASS',canAnswer:false,label:await spectator.locator('#spectator-status').textContent()};
+ await spectator.evaluate(()=>leaveRoom());await spectator.close();
+ // A former round's ACK cannot mark the new question as submitted in the UI.
+ const next=await control('question',{roomId,index:1,question:{type:'SHORT',answer:'부산',timeLimit:60},duration:60000});
+ await page.waitForFunction(round=>roomState?.roundId===round&&!playerEntities.get(myClientId)?.hasSubmitted,next.roundId);
+ await page.evaluate(old=>ws.onmessage({data:JSON.stringify({type:'ANSWER_ACK',roomId:currentRoomId,gameId:old.gameId,roundId:old.roundId,answer:'서울'})}),short);
+ assert.equal(await page.evaluate(()=>playerEntities.get(myClientId).hasSubmitted),false);result.staleAck={status:'PASS'};
+ await page.bringToFront();await page.evaluate(()=>ws.send(JSON.stringify({type:'CREATE_ROOM',title:'일반 이동 점검',nickname:'이동 점검',worldDelta:true,targetWinners:1,questions:[{type:'OX',question:'점검',answer:'O',timeLimit:15}]})));
+ await page.waitForFunction(old=>currentRoomId!==old&&roomState?.state==='WAITING'&&playerEntities.has(myClientId),roomId);
+ await sleep(150);const walkRoom=await page.evaluate(()=>currentRoomId),walkBefore=(await control('snapshot',{roomId:walkRoom})).players.find(p=>p.id===hostId);
+ await page.keyboard.down('ArrowRight');await sleep(1000);await page.keyboard.up('ArrowRight');await sleep(150);
+ const walkAfter=(await control('snapshot',{roomId:walkRoom})).players.find(p=>p.id===hostId),clientAfter=await page.evaluate(()=>myPos.x),distance=walkAfter.x-walkBefore.x;
+ assert.ok(distance>4&&distance<9,'Normal walking distance: '+distance);assert.ok(Math.abs(clientAfter-walkAfter.x)<.2);
+ result.walking={status:'PASS',serverDistance:distance,clientServerDifference:Math.abs(clientAfter-walkAfter.x)};
+ assert.equal(errors.length,0,errors.join('\n'));result.browserErrors=errors;
+ fs.writeFileSync('artifacts/client-judgement-audit'+suffix+'.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+}finally{guest?.terminate();await browser?.close();child?.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

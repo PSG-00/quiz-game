@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const AvatarCatalog=require('../client/avatarCatalog');
 const QuizLimits=require('../client/quizLimits');
 const {WorldStream}=require('./WorldStream');
+const ArenaRules=require('../client/arenaRules');
 
 // Answer stage and lower spectator floor use separate bounds.
 const ARENA_HALF_W = 10; // X: -10 ~ +10
@@ -63,16 +64,7 @@ function clamp(val, min, max) {
 }
 
 // 플레이어의 x 좌표와 현재 문제 타입에 따라 무대 구역(Zone) 계산
-function computeZone(type, x, z = 0) {
-  if(type==='MINORITY')return x<0?'LEFT':'RIGHT';
-  if (type === 'OX') {
-    return x < 0 ? 'O' : 'X';
-  }
-  if (type === 'MULTIPLE') {
-    return String((z >= 0 ? 2 : 0) + (x >= 0 ? 2 : 1));
-  }
-  return '';
-}
+const computeZone=ArenaRules.zone;
 
 class Room {
   constructor(options, hostId) {
@@ -113,6 +105,7 @@ class Room {
     // WAITING | COUNTDOWN | PREPARING | QUESTION | JUDGE | BREAK | LOTTERY | ENDED
     this.state = 'WAITING';
     this.gameId = null;
+    this.roundId = null;
     this.roundParticipants.clear();
     this.currentQuestionIndex = -1;
     this.stateEndTime = 0;
@@ -125,6 +118,7 @@ class Room {
 
   // 현재 라운드에서 해당 플레이어가 무대 위(OnStage) 참가자인지, 아래층 관전석(Spectator)인지 반환
   isPlayerOnStage(player) {
+    if(player.eligible===false)return false;
     if (['PREPARING', 'QUESTION'].includes(this.state)) return this.roundParticipants.has(player.id);
     return player.alive;
   }
@@ -138,6 +132,7 @@ class Room {
     }
     const saved = player[onStage ? 'lastStagePosition' : 'lastSpectatorPosition'];
     player.placedOnStage = onStage;
+    player.moveCredit=1.5;player.lastMoveAt=Date.now();
     const slot = player.spawnSlot;
     const fraction = value => value-Math.floor(value);
     // New arrivals use stable, distinct slots without moving earlier arrivals.
@@ -165,6 +160,8 @@ class Room {
       x: 0,
       z: 0,
       alive,
+      eligible:alive,
+      connected:true,
       spriteSeed,
       avatarId:AvatarCatalog.normalize(avatarId),
       submittedText: '',
@@ -179,8 +176,40 @@ class Room {
   }
 
   removePlayer(id) {
+    const p=this.players.get(id);if(p?.disconnectTimer)clearTimeout(p.disconnectTimer);
     this.players.delete(id);
-    if (this.hostId === id) this.hostId = (this.testBotIds?[...this.players.keys()].find(pid=>!this.testBotIds.has(pid)):null)||this.players.keys().next().value||null;
+    this.roundParticipants.delete(id);
+    if (this.hostId === id) this.assignHost();
+  }
+
+  assignHost(){
+    const active=[...this.players.values()].filter(p=>p.connected!==false);
+    this.hostId=(active.find(p=>!this.testBotIds?.has(p.id))||active[0])?.id||null;
+  }
+
+  disconnectPlayer(id,onExpire,now=Date.now()){
+    const p=this.players.get(id);if(!p||p.connected===false)return;
+    p.connected=false;p.ws=null;p.disconnectedUntil=now+30000;
+    if(this.hostId===id)this.assignHost();
+    p.onDisconnectExpire=onExpire;
+    p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),30000);
+    p.disconnectTimer.unref?.();
+  }
+
+  expirePlayer(id,now=Date.now()){
+    const p=this.players.get(id);
+    if(!p||p.connected!==false||now<p.disconnectedUntil)return false;
+    const callback=p.onDisconnectExpire;this.removePlayer(id);callback?.();return true;
+  }
+
+  resumePlayer(p,ws,now=Date.now()){
+    if(this.players.get(p.id)!==p||p.connected===false&&now>=p.disconnectedUntil)return false;
+    if(p.disconnectTimer)clearTimeout(p.disconnectTimer);
+    p.disconnectTimer=null;p.onDisconnectExpire=null;p.disconnectedUntil=null;p.connected=true;p.ws=ws;
+    if(this.state==='WAITING'){p.eligible=true;p.alive=true;this.placePlayerInRoleZone(p);}
+    p.moveCredit=Math.min(1.5,p.moveCredit??1.5);p.lastMoveAt=now;
+    if(!this.hostId||this.testBotIds?.has(this.hostId))this.assignHost();
+    return true;
   }
 
   getCurrentQuestion() {
@@ -193,7 +222,7 @@ class Room {
   getAlivePlayers() {
     const list = [];
     for (const p of this.players.values()) {
-      if (p.alive) list.push(p);
+      if (p.alive&&p.eligible!==false) list.push(p);
     }
     return list;
   }
@@ -201,7 +230,7 @@ class Room {
   getGhostPlayers() {
     const list = [];
     for (const p of this.players.values()) {
-      if (!p.alive) list.push(p);
+      if (!p.alive&&p.eligible!==false) list.push(p);
     }
     return list;
   }
@@ -210,10 +239,12 @@ class Room {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
     this.gameId = crypto.randomUUID();
+    this.roundId=null;
     this.state = 'COUNTDOWN';
 
     for (const p of this.players.values()) {
-      p.alive = true;
+      p.eligible=p.connected!==false;
+      p.alive = p.eligible;
       p.submittedText = '';
       p.hasSubmitted = false;
       p.lastResult = null;
@@ -250,6 +281,7 @@ class Room {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
     this.currentQuestionIndex++;
+    this.roundId=crypto.randomUUID();
 
     if (this.currentQuestionIndex >= this.questions.length) {
       this.finishOrLottery('최종 라운드 종료!');
@@ -271,7 +303,7 @@ class Room {
       return;
     }
 
-    this.roundParticipants = new Set([...this.players.values()].filter(p => q.isRevival ? !p.alive : p.alive).map(p => p.id));
+    this.roundParticipants = new Set([...this.players.values()].filter(p => p.eligible!==false&&(q.isRevival ? !p.alive : p.alive)).map(p => p.id));
     this.state = 'PREPARING';
     // Place round participants before the answer timer begins.
     for (const p of this.players.values()) {
@@ -326,7 +358,7 @@ class Room {
     // who joined after this round started never affect either side's count.
     let correctAnswer=q.answer;
     if(q.type==='MINORITY'){
-      const participants=[...this.players.values()].filter(p=>this.roundParticipants.has(p.id));
+      const participants=[...this.players.values()].filter(p=>p.eligible!==false&&this.roundParticipants.has(p.id));
       const leftCount=participants.filter(p=>computeZone('MINORITY',p.x)==='LEFT').length;
       const rightCount=participants.length-leftCount,tie=leftCount===rightCount;
       const winningZone=tie?(crypto.randomInt(2)===0?'LEFT':'RIGHT'):(leftCount<rightCount?'LEFT':'RIGHT');
@@ -358,7 +390,7 @@ class Room {
       // 패자부활전: 유령 참가자의 인원으로 조기 종료를 판정하지 않고, 부활 결과를 반영한 실제 생존 인원 기준으로 판단
       let revivedCount = 0;
       for (const p of this.players.values()) {
-        if (!this.roundParticipants.has(p.id)) {
+        if (p.eligible===false||!this.roundParticipants.has(p.id)) {
           p.lastResult = 'SAFE';
         } else {
           if (isPlayerCorrect(p)) {
@@ -512,6 +544,7 @@ class Room {
     this.minorityOutcome=null;
     this.state = 'WAITING';
     this.gameId = null;
+    this.roundId=null;
     this.roundParticipants.clear();
     this.currentQuestionIndex = -1;
     this.winners = [];
@@ -520,7 +553,8 @@ class Room {
     this.lastNotice = '목표 이하면 즉시 종료 · 남은 생존자 전원 당첨';
 
     for (const p of this.players.values()) {
-      p.alive = true;
+      p.eligible=p.connected!==false;
+      p.alive = p.eligible;
       p.submittedText = '';
       p.hasSubmitted = false;
       p.lastResult = null;
@@ -530,7 +564,7 @@ class Room {
   }
 
   // Server owns role bounds and answer deadlines.
-  movePlayer(clientId, nx, nz) {
+  movePlayer(clientId, nx, nz, {enforceSpeed=false,now=Date.now()}={}) {
     const p = this.players.get(clientId);
     if (!p) return;
     if (!Number.isFinite(nx) || !Number.isFinite(nz)) return;
@@ -541,13 +575,20 @@ class Room {
     const q = this.getCurrentQuestion();
     if (onStage && this.state === 'QUESTION' && (q.type === 'SHORT' || (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE'))) return;
     const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
-    p.x = Number(clamp(nx, -halfW, halfW).toFixed(2));
-    p.z = Number(clamp(nz, onStage ? STAGE_MIN_Z + 0.8 : SPECTATOR_MIN_Z, onStage ? STAGE_MAX_Z - 0.8 : SPECTATOR_MAX_Z).toFixed(2));
+    nx=ArenaRules.coordinate(clamp(nx,-halfW,halfW));
+    nz=ArenaRules.coordinate(clamp(nz,onStage?STAGE_MIN_Z+.8:SPECTATOR_MIN_Z,onStage?STAGE_MAX_Z-.8:SPECTATOR_MAX_Z));
+    if(enforceSpeed){
+      p.moveCredit=Math.min(2,(p.moveCredit??1.5)+Math.max(0,now-(p.lastMoveAt??now))*.0085);p.lastMoveAt=now;
+      const distance=Math.hypot(nx-p.x,nz-p.z);
+      if(distance>p.moveCredit+.03)return false;
+      p.moveCredit=Math.max(0,p.moveCredit-distance);
+    }
+    p.x=nx;p.z=nz;return true;
   }
 
   submitAnswer(id, answer, editing = false) {
     const p = this.players.get(id), q = this.getCurrentQuestion();
-    if (!p || !q || this.state !== 'QUESTION' || Date.now() >= this.stateEndTime || !this.roundParticipants.has(id)) return;
+    if (!p || p.eligible===false || !q || this.state !== 'QUESTION' || Date.now() >= this.stateEndTime || !this.roundParticipants.has(id)) return;
     if (editing) { p.isEditing = true; return; }
     if (q.type !== 'SHORT' && !(q.type === 'MULTIPLE' && q.inputMode !== 'MOVE')) return;
     const text = String(answer || '').trim();
@@ -556,7 +597,7 @@ class Room {
     p.submittedText = text;
     p.hasSubmitted = !!text;
     p.isEditing = false;
-    if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.stringify({type: 'ANSWER_ACK', answer: text}));
+    if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.stringify({type: 'ANSWER_ACK', answer: text,roomId:this.id,gameId:this.gameId,roundId:this.roundId}));
   }
 
   broadcastRoomEvent(extra = {}) {
@@ -579,8 +620,12 @@ class Room {
       type: 'ROOM_STATE',
       roomId: this.id,
       gameId: this.gameId,
+      roundId:this.roundId,
       title: this.title,
       playerCount: this.players.size,
+      connectedCount:[...this.players.values()].filter(p=>p.connected!==false).length,
+      reservedCount:[...this.players.values()].filter(p=>p.connected===false).length,
+      spectatorCount:[...this.players.values()].filter(p=>p.eligible===false).length,
       maxPlayers: this.maxPlayers,
       hostId: this.hostId,
       state: this.state,
@@ -616,6 +661,8 @@ class Room {
         x: p.x,
         z: p.z,
         a: p.alive ? 1 : 0,
+        el:p.eligible===false?0:1,
+        c:p.connected===false?0:1,
         st: onStage ? 1 : 0, // 1 = 무대 위, 0 = 아래층 관전석
         s: p.spriteSeed,
         av: p.avatarId,
@@ -645,13 +692,14 @@ class RoomManager {
   }
   createRoom(options,hostId){const room=new Room(options,hostId);this.rooms.set(room.id,room);return room;}
   getRoom(id){return this.rooms.get(id);}
-  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,playerCount:room.players.size,maxPlayers:room.maxPlayers,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
+  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,playerCount:room.players.size,reservedCount:[...room.players.values()].filter(p=>p.connected===false).length,maxPlayers:room.maxPlayers,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
   closeRoom(room){
     if(!room||this.rooms.get(room.id)!==room)return;
     if(room.timerHandle)clearTimeout(room.timerHandle);
+    for(const p of room.players.values())if(p.disconnectTimer)clearTimeout(p.disconnectTimer);
     room.players.clear();this.rooms.delete(room.id);
   }
   cleanupEmptyRooms(){for(const room of this.rooms.values())if(!room.players.size)this.closeRoom(room);}
-  close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values())if(room.timerHandle)clearTimeout(room.timerHandle);}
+  close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values()){if(room.timerHandle)clearTimeout(room.timerHandle);for(const p of room.players.values())if(p.disconnectTimer)clearTimeout(p.disconnectTimer);}}
 }
 module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS};
