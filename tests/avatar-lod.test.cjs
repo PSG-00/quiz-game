@@ -15,3 +15,11 @@ test('구 GLTFLoader의 노드 식별자와 새 로더의 메시 식별자 모�
   vm.runInNewContext(fs.readFileSync('client/avatarLOD.js','utf8'),context);await context.window.AvatarLOD.load('model.glb',{scene:{traverse:fn=>fn(mesh)},parser:{json:{nodes:[{mesh:2}]},associations:new Map([[mesh,association]])}});assert.deepEqual([...geometry.userData.lodIndices[0].array],[0,1,2]);
  }
 });
+
+test('75%로 줄인 관전석 아바타는 실제 표시 크기를 반영해 LOD를 선택',()=>{
+ const context={window:{},THREE:{Vector3:class{applyMatrix4(){return this;}}}};
+ vm.runInNewContext(fs.readFileSync('client/avatarLOD.js','utf8'),context);
+ const camera={fov:60,matrixWorldInverse:{}},level=(scale,depth)=>context.window.AvatarLOD.level({scale:{y:scale},userData:{visualHeight:3.16},getWorldPosition:out=>{out.z=-depth;return out;}},camera,1000);
+ assert.equal(level(1,15),0);assert.equal(level(.75,15),1);
+ assert.equal(level(1,32),1);assert.equal(level(.75,32),2);
+});

@@ -42,6 +42,7 @@ const playerEntities = new Map();
 let myPos = { x: -6, z: 0 };
 let myMoveTarget = null;
 let lastSentPosTime = 0;
+let lastSentPosKey = '';
 
 const keysPressed = {
   ArrowUp: false,
@@ -561,6 +562,9 @@ function getOrCreatePlayerEntity(p) {
   const lowDetail=!isMe&&lowSpecMode;
   const charSprite = lowDetail?MobileCrowd.create(avatarId,avatarSeed):isMe?AvatarActors.create(avatarSeed,avatarId):AvatarActors.pending(avatarId);
   group.add(charSprite);
+  const avatarScale = onStage ? 1 : .75;
+  charSprite.scale.setScalar(avatarScale);
+  shadowMesh.scale.setScalar(avatarScale);
 
   // 머리 위 O/X·번호·관전 말풍선 + 내 캐릭터 전용 '나' 표식 캔버스
   const overheadCanvas = document.createElement('canvas');
@@ -603,6 +607,7 @@ function getOrCreatePlayerEntity(p) {
     chatText,
     group,
     charSprite,
+    avatarScale,
     detailedAvatar:lowDetail?null:charSprite,
     simpleAvatar:lowDetail?charSprite:null,
     avatarId,
@@ -689,7 +694,7 @@ function updatePlayerOverheadIfNeeded(entity) {
 
 // ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
 const clock = new THREE.Clock();
-let frameNumber=0,perfFrames=0,perfSince=performance.now(),renderFps=0;
+let frameNumber=0;
 const framePacing=FramePacing.create(144);
 const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
 function disposeEntityAvatar(entity){
@@ -750,7 +755,7 @@ function animate(frameTime) {
   if(!framePacing.accept(frameTime))return;
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
-  frameNumber++;perfFrames++;if(now-perfSince>=1000){renderFps=perfFrames*1000/(now-perfSince);perfFrames=0;perfSince=now;const stats=document.getElementById('rules-performance');if(stats&&document.getElementById('rules-dialog').open)stats.textContent=`현재 ${Math.round(renderFps)} FPS · 최대 144 FPS 설정`;}
+  frameNumber++;
   avatarViewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);avatarFrustum.setFromProjectionMatrix(avatarViewProjection);
   const joystickEnabled=portraitScreen()&&canMove();
   joystickRoot.classList.toggle('hidden',!joystickEnabled);
@@ -798,7 +803,12 @@ function animate(frameTime) {
 
     if (ws && ws.readyState === WebSocket.OPEN && now - lastSentPosTime > 55) {
       lastSentPosTime = now;
-      ws.send(JSON.stringify({ type: 'MOVE', x: myPos.x, z: myPos.z }));
+      // Match the server's coordinate precision; standing still needs no MOVE.
+      const positionKey = `${myEntity?.onStage}:${myPos.x.toFixed(2)}:${myPos.z.toFixed(2)}`;
+      if(positionKey !== lastSentPosKey){
+        lastSentPosKey = positionKey;
+        ws.send(JSON.stringify({ type: 'MOVE', x: myPos.x, z: myPos.z }));
+      }
     }
 
     if (myEntity) {
@@ -839,6 +849,11 @@ function animate(frameTime) {
     const facingX=facingProjection.x*layoutScaleX,facingZ=facingProjection.z*(entity.onStage?layoutScaleZ:.7);
     if(dist<.08)entity.motion.teleporting=false;
     AvatarMotion.advance(entity.motion,dt,facingX,facingZ,dist*lerp,entity.motion.teleporting);
+    const targetScale = entity.onStage ? 1 : .75;
+    entity.avatarScale += (targetScale-entity.avatarScale)*(1-Math.exp(-10*dt));
+    if(Math.abs(targetScale-entity.avatarScale)<.001)entity.avatarScale=targetScale;
+    entity.charSprite.scale.setScalar(entity.avatarScale);
+    entity.shadowMesh.scale.setScalar(entity.avatarScale);
     entity.charSprite.rotation.y=entity.motion.heading;
     entity.group.position.set(viewPosition.x, entity.y, viewPosition.z);
     avatarSphere.center.copy(entity.group.position);avatarSphere.center.y+=1.5;
@@ -854,7 +869,7 @@ function animate(frameTime) {
       if(now<entity.nextLabelAt)continue;
       entity.nextLabelAt=now+1000/30;
     }
-    const displayHeight=entity.charSprite.userData.displayHeight||entity.charSprite.userData.visualHeight||2.95;
+    const displayHeight=(entity.charSprite.userData.displayHeight||entity.charSprite.userData.visualHeight||2.95)*entity.avatarScale;
     nicknamePosition.set(viewPosition.x,entity.y+displayHeight,viewPosition.z).project(camera);
     const nameVisible = Math.abs(nicknamePosition.x)<1.1 && Math.abs(nicknamePosition.y)<1.1 && Math.abs(nicknamePosition.z)<1;
     const anchorX=(nicknamePosition.x+1)*viewWidth/2,nameY=(1-nicknamePosition.y)*viewHeight/2-5;
@@ -903,7 +918,7 @@ function animate(frameTime) {
     if (entity.goldRingMesh) {
       entity.goldRingMesh.rotation.z = now * .0008;
       const locating = performance.now() < findMeUntil;
-      entity.goldRingMesh.scale.setScalar(locating ? 1.45 + Math.sin(now*.012)*.18 : 1);
+      entity.goldRingMesh.scale.setScalar(entity.avatarScale*(locating ? 1.45 + Math.sin(now*.012)*.18 : 1));
     }
 
     entity.overheadSprite.visible = nameVisible&&(entity.id === myClientId || performance.now() >= findMeUntil);
@@ -969,6 +984,7 @@ function connectWebSocket() {
       }
 
       case 'JOINED_ROOM': {
+        lastSentPosKey='';lastSentPosTime=0;
         creatingRoomRequestId=null;updateSaveButtons();
         cameraFollow.initialized=false;cameraFollow.x=0;cameraFollow.targetX=0;
         currentRoomId = msg.roomId;
@@ -1422,6 +1438,7 @@ function returnToLobby(){
  resetJoystick();
  closeChatPopup();
  currentRoomId=null;roomState=null;renderedPhaseKey=null;myMoveTarget=null;
+ lastSentPosKey='';lastSentPosTime=0;
  document.body.classList.remove('answer-mode','multiple-mode','move-answer-mode','break-mode');
  document.getElementById('game-hud').classList.add('hidden');
  document.getElementById('winner-modal').classList.add('hidden');
