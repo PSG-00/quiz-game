@@ -1076,7 +1076,7 @@
         },
         {
           "type": "OX",
-          "question": "리센느의 리더이자 2004년생 맏언니인 멤버는 원이(WONI)이다.",
+          "question": "리센느의 메인보컬 포지션을 맡고 있는 멤버 리브(LIV)의 본명은 진경은이다.",
           "answer": "O",
           "choices": [
             "",
@@ -1091,25 +1091,9 @@
           "caseSensitive": false
         },
         {
-          "type": "MULTIPLE",
-          "question": "리센느 데뷔 싱글 1집 《Re:Scene》의 타이틀곡 제목은?",
-          "answer": "1",
-          "choices": [
-            "UhUh",
-            "YoYo",
-            "LOVE ATTACK",
-            "Pinball"
-          ],
-          "timeLimit": 12,
-          "isRevival": false,
-          "inputMode": "BUTTON",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
           "type": "SHORT",
-          "question": "멤버 중 유일한 일본 국적이며 과거 MBC 방과후 설렘에 출연했던 멤버의 활동명은?",
-          "answer": "미나미, Minami, minami",
+          "question": "리센느 멤버 중 2004년생 맏언니이자 팀의 든든한 리더를 맡고 있는 멤버는?",
+          "answer": "원이, 정원이, WONI, woni",
           "choices": [
             "",
             "",
@@ -1123,8 +1107,24 @@
           "caseSensitive": false
         },
         {
+          "type": "MULTIPLE",
+          "question": "나무위키 특징: 리센느 멤버 5명 전원의 MBTI에 공통으로 들어가는 알파벳은?",
+          "answer": "1",
+          "choices": [
+            "P (인식형)",
+            "E (외향형)",
+            "F (감정형)",
+            "N (직관형)"
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
           "type": "OX",
-          "question": "리센느에서 메인보컬 포지션을 맡고 있는 멤버 리브(LIV)의 본명은 진경은이다.",
+          "question": "나무위키 여담: 리센느 멤버 5명 전원은 형제자매 중 언니와 남동생이 한 명도 없다.",
           "answer": "O",
           "choices": [
             "",
@@ -1132,7 +1132,23 @@
             "",
             ""
           ],
-          "timeLimit": 12,
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "멤버 미나미가 데뷔 전 파이널 생방송 무대(TOP 14)까지 진출했던 MBC 아이돌 서바이벌 프로그램 이름은?",
+          "answer": "방과후 설렘, 방과후설렘",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
           "isRevival": false,
           "inputMode": "BUTTON",
           "ignoreSpaces": true,
@@ -1140,15 +1156,15 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "2024년 8월 발매되어 대중적 역주행을 기록한 미니 1집 《SCENEDROME》의 타이틀곡은?",
+          "question": "미니 1집 《SCENEDROME》에서 역주행곡 LOVE ATTACK과 함께 더블 타이틀로 수록된 선공개 곡은?",
           "answer": "1",
           "choices": [
-            "LOVE ATTACK",
-            "Glow Up",
             "Pinball",
+            "New World",
+            "Lucky you",
             "YoYo"
           ],
-          "timeLimit": 12,
+          "timeLimit": 15,
           "isRevival": false,
           "inputMode": "BUTTON",
           "ignoreSpaces": true,
@@ -1156,7 +1172,7 @@
         },
         {
           "type": "MINORITY",
-          "question": "[소수결] 운명의 갈림길! 사람이 더 적은 구역(왼쪽 vs 오른쪽)만 생존합니다!",
+          "question": "[소수결] 운명의 갈림길! 더 적은 사람이 서 있는 구역(왼쪽 vs 오른쪽)만 생존합니다!",
           "answer": "",
           "choices": [
             "왼쪽",
@@ -1167,45 +1183,13 @@
           "timeLimit": 15,
           "isRevival": false,
           "inputMode": "MOVE",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
-          "type": "OX",
-          "question": "[패자부활전] 그룹명 RESCENE은 Scene(장면)과 Scent(향)를 결합해 향기로 장면을 떠올린다는 뜻이다.",
-          "answer": "O",
-          "choices": [
-            "",
-            "",
-            "",
-            ""
-          ],
-          "timeLimit": 12,
-          "isRevival": true,
-          "inputMode": "BUTTON",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
-          "type": "OX",
-          "question": "나무위키 특징: 리센느 멤버 5명 전원의 MBTI 끝자리는 모두 P(인식형)이다.",
-          "answer": "O",
-          "choices": [
-            "",
-            "",
-            "",
-            ""
-          ],
-          "timeLimit": 15,
-          "isRevival": false,
-          "inputMode": "BUTTON",
           "ignoreSpaces": true,
           "caseSensitive": false
         },
         {
           "type": "SHORT",
-          "question": "미니 1집 《SCENEDROME》에서 LOVE ATTACK과 함께 더블 타이틀로 수록된 선공개 곡은?",
-          "answer": "Pinball, 핀볼, pinball",
+          "question": "[나무위키 킬러] 경기도 수원 출신 리브(LIV)가 고향 명물 음식과 본인의 갸루 성향을 합쳐 얻은 별명은? (수원 OOOOO)",
+          "answer": "왕갸루비, 수원 왕갸루비, 수원왕갸루비, 갸루비",
           "choices": [
             "",
             "",
@@ -1220,7 +1204,7 @@
         },
         {
           "type": "OX",
-          "question": "리센느의 공식 영문 로고에는 영어 발음 오독(리씬)을 방지하기 위해 악센트 부호(é)가 들어간다.",
+          "question": "[★단 한 번의 패자부활전★] 그룹명 RESCENE은 Scene(장면)과 Scent(향)를 합쳐 향기로 장면을 떠올린다는 뜻이다.",
           "answer": "O",
           "choices": [
             "",
@@ -1229,39 +1213,39 @@
             ""
           ],
           "timeLimit": 12,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "멤버 중 리브·미나미·제나가 한림예고를 중퇴하여, 팀 내 유일한 고졸 및 최고 학력자가 된 멤버는?",
+          "answer": "1",
+          "choices": [
+            "원이",
+            "메이",
+            "리브",
+            "미나미"
+          ],
+          "timeLimit": 15,
           "isRevival": false,
           "inputMode": "BUTTON",
           "ignoreSpaces": true,
           "caseSensitive": false
         },
         {
-          "type": "MINORITY",
-          "question": "[소수결] 눈치 싸움 시작! 더 적은 인원이 서 있는 구역(왼쪽 vs 오른쪽)만 생존합니다!",
-          "answer": "",
+          "type": "OX",
+          "question": "미니 1집 《SCENEDROME》의 콘셉트로 매칭된 메인 시그니처 향기는 용연향(Ambergris)이다.",
+          "answer": "O",
           "choices": [
-            "왼쪽",
-            "오른쪽",
+            "",
+            "",
             "",
             ""
           ],
           "timeLimit": 15,
           "isRevival": false,
-          "inputMode": "MOVE",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
-          "type": "MULTIPLE",
-          "question": "[패자부활전] 정식 데뷔 전인 2024년 2월에 선공개되었던 싱글 1집 수록곡의 제목은?",
-          "answer": "1",
-          "choices": [
-            "YoYo",
-            "KoKo",
-            "ZoZo",
-            "NoNo"
-          ],
-          "timeLimit": 12,
-          "isRevival": true,
           "inputMode": "BUTTON",
           "ignoreSpaces": true,
           "caseSensitive": false
@@ -1273,8 +1257,8 @@
           "choices": [
             "한국어 발음이 일본인 미나미보다 어눌할 때가 있어서",
             "일본 도쿄에서 3년간 유학 생활을 해서",
-            "일본 애니메이션 오타쿠라서",
-            "미나미와 친자매처럼 닮아서"
+            "미나미와 친자매처럼 외모가 닮아서",
+            "일본 애니메이션 마니아라서"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1284,7 +1268,7 @@
         },
         {
           "type": "OX",
-          "question": "나무위키 여담: 리센느 멤버 5명 전원은 언니와 남동생이 한 명도 없다.",
+          "question": "리센느의 공식 영문 로고 표기에는 영어 발음 오독(리씬) 방지를 위해 악센트 부호가 들어간 RESCÉNE를 사용한다.",
           "answer": "O",
           "choices": [
             "",
@@ -1300,8 +1284,8 @@
         },
         {
           "type": "SHORT",
-          "question": "유튜브 채널에서 레전드 갸루 분장을 선보여 폭발적 화제를 모은 미나미의 별명은? (OO귀신)",
-          "answer": "갸루귀신, 갸루",
+          "question": "경북 경주 출신 제나(ZENA)가 경주시 홍보대사로 위촉되며 가마를 타고 실제로 수여받은 명예 증서의 이름은? (명예 OOOO증)",
+          "answer": "신라공주, 명예 신라공주, 신라공주증, 명예신라공주증",
           "choices": [
             "",
             "",
@@ -1316,7 +1300,7 @@
         },
         {
           "type": "MINORITY",
-          "question": "[소수결] 파이널 직전 최후의 선택! 더 적은 사람이 선택한 구역(왼쪽 vs 오른쪽)만 생존합니다!",
+          "question": "[소수결] 파이널 직전 최후의 눈치싸움! 인원이 더 적은 구역(왼쪽 vs 오른쪽)만 생존합니다!",
           "answer": "",
           "choices": [
             "왼쪽",
@@ -1332,7 +1316,7 @@
         },
         {
           "type": "SHORT",
-          "question": "[패자부활전] 향기를 통해 과거의 기억을 떠올리는 현상으로 리센느의 핵심 모티브가 된 효과는? (OOO 효과)",
+          "question": "향기를 통해 과거의 기억이나 감정을 되살리는 심리학 현상으로 리센느의 핵심 모티브가 된 효과는? (OOO 효과)",
           "answer": "프루스트, 프루스트 효과, 프루스트효과, proust",
           "choices": [
             "",
@@ -1341,20 +1325,36 @@
             ""
           ],
           "timeLimit": 15,
-          "isRevival": true,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "나무위키 프로필: 막내 라인인 멤버 메이(MAY)는 리센느 멤버 5명 중 키가 가장 큰 최장신 멤버이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
           "inputMode": "BUTTON",
           "ignoreSpaces": true,
           "caseSensitive": false
         },
         {
           "type": "MULTIPLE",
-          "question": "[골든벨 킬러] 나무위키 여담: 소속사 대표님이 광팬이라 멤버들도 챙겨본다는 해외 축구 클럽은?",
+          "question": "[골든벨 최종관문] 소속사 대표님이 열렬한 광팬이라 멤버들도 챙겨본다는 잉글랜드 프리미어리그(EPL) 축구 클럽은?",
           "answer": "1",
           "choices": [
             "아스날 FC (Arsenal)",
-            "토트넘 홋스퍼 (Tottenham)",
-            "맨체스터 유나이티드 (Man Utd)",
-            "레알 마드리드 (Real Madrid)"
+            "맨체스터 시티 (Man City)",
+            "첼시 FC (Chelsea)",
+            "토트넘 홋스퍼 (Tottenham)"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1367,7 +1367,7 @@
       "owners": [
         "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc"
       ],
-      "updatedAt": "2026-10-25T17:47:39.789Z"
+      "updatedAt": "2026-10-25T17:54:19.292Z"
     }
   ],
   "deletedQuizIds": [
