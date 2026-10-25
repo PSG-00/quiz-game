@@ -10,8 +10,28 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
+      - name: Preserve live quiz data before clean checkout
+        shell: bash
+        run: |
+          umask 077
+          quiz_backup_dir="$(mktemp -d "$RUNNER_TEMP/quiz-data.XXXXXX")"
+          echo "QUIZ_DATA_BACKUP=$quiz_backup_dir" >> "$GITHUB_ENV"
+          if [ -d "$GITHUB_WORKSPACE/data" ]; then
+            if pm2 describe ox-quiz-show > /dev/null 2>&1; then
+              pm2 stop ox-quiz-show
+            fi
+            cp -a "$GITHUB_WORKSPACE/data" "$quiz_backup_dir/data"
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Restore only quiz data
+        shell: bash
+        run: |
+          if [ -d "$QUIZ_DATA_BACKUP/data" ]; then
+            cp -a "$QUIZ_DATA_BACKUP/data" "$GITHUB_WORKSPACE/data"
+          fi
 
       - name: Install dependencies
         run: |
