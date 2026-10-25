@@ -689,8 +689,7 @@ function updatePlayerOverheadIfNeeded(entity) {
 
 // ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
 const clock = new THREE.Clock();
-let frameNumber=0,perfFrames=0,perfSince=performance.now(),renderFps=0,lastWorldAt=0,worldGap=0,lastRenderFrame=0;
-const frameSamples=[],refreshSamples=[];let lastAnimationFrame=0;
+let frameNumber=0,perfFrames=0,perfSince=performance.now(),renderFps=0;
 const framePacing=FramePacing.create(144);
 const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
 function disposeEntityAvatar(entity){
@@ -746,11 +745,9 @@ updateLowSpecButton();
 function animate(frameTime) {
   requestAnimationFrame(animate);
   const now = performance.now();
-  if(document.hidden){framePacing.accept(frameTime,true);lastRenderFrame=0;lastAnimationFrame=0;return;}
-  if(lastAnimationFrame){refreshSamples.push(frameTime-lastAnimationFrame);if(refreshSamples.length>240)refreshSamples.shift();}lastAnimationFrame=frameTime;
+  if(document.hidden){framePacing.accept(frameTime,true);return;}
   // rAF follows the browser/display refresh rate; never force a 60 Hz mobile cap.
   if(!framePacing.accept(frameTime))return;
-  if(lastRenderFrame){frameSamples.push(frameTime-lastRenderFrame);if(frameSamples.length>240)frameSamples.shift();}lastRenderFrame=frameTime;
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
   frameNumber++;perfFrames++;if(now-perfSince>=1000){renderFps=perfFrames*1000/(now-perfSince);perfFrames=0;perfSince=now;const stats=document.getElementById('rules-performance');if(stats&&document.getElementById('rules-dialog').open)stats.textContent=`현재 ${Math.round(renderFps)} FPS · 최대 144 FPS 설정`;}
@@ -940,7 +937,6 @@ function animate(frameTime) {
 }
 
 requestAnimationFrame(animate);
-window.QuizPerformance={snapshot:()=>({mobile:mobilePerformance,lowSpec:lowSpecMode,fps:Math.round(renderFps),antialias:sceneAntialias.mode,frameLimit:144,frameP95Ms:frameSamples.length?Math.round([...frameSamples].sort((a,b)=>a-b)[Math.floor(frameSamples.length*.95)]*10)/10:null,browserCallbackHz:refreshSamples.length?Math.round(1000/(refreshSamples.reduce((a,b)=>a+b,0)/refreshSamples.length)):null,pixelRatio:renderer.getPixelRatio(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,worldGapMs:Math.round(worldGap),worldAgeMs:lastWorldAt?Math.round(performance.now()-lastWorldAt):null,detailed:[...playerEntities.values()].filter(e=>!e.lowDetail).length,proxies:[...playerEntities.values()].filter(e=>e.lowDetail).length,cachedDetails:[...playerEntities.values()].filter(e=>e.detailedAvatar).length,crowd:MobileCrowd.stats(),decorations:CrowdDecorations.stats(),host:{triangles:hostSprite.userData.triangles,drawCalls:hostSprite.userData.drawCalls},instancing:InstancedAvatars.stats()})};
 
 // ==================== 5. 웹소켓 통신 ====================
 function connectWebSocket() {
@@ -1050,7 +1046,6 @@ function triggerPillBump(elementId) {
 }
 
 function handleWorldTick(compactList) {
-  const receivedAt=performance.now();if(lastWorldAt)worldGap=receivedAt-lastWorldAt;lastWorldAt=receivedAt;
   const hadSpectators = [...playerEntities.values()].some(entity=>!entity.onStage);
   const seenIds = new Set();
   let aliveCount = 0;
