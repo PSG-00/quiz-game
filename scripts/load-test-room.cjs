@@ -2,6 +2,7 @@
    Normal `npm start` never creates bots. All rooms use the same 50-player cap. */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const WebSocket=require('ws');
+const worldUpdates=require('../client/worldUpdates').create();
 const {RoomManager}=require('../server/RoomManager');
 const PORT=Number(process.env.PORT||3105),COUNT=49,TITLE='[테스트] 50명 방 · 이동/소수결';
 const botIds=new Set(),bots=[],avatars=['woni','liv','minami','may','may-school','zena'];
@@ -28,15 +29,15 @@ function connectBot(index){return new Promise((resolve,reject)=>{
   receivedBytes+=raw.length;
   // Every socket still receives real traffic. Parse the identical world snapshot
   // once, so the bot driver's own JSON work does not dominate this PC's result.
-  if(index!==0&&raw.subarray(0,30).toString().includes('WORLD_TICK'))return;
+  if(index!==0&&raw.subarray(0,50).toString().includes('WORLD_'))return;
   let m;try{m=JSON.parse(raw);}catch{return;}
   if(m.type==='WELCOME'){
    bot.id=m.clientId;botIds.add(bot.id);
    if(index===0){bootstrapClientId=bot.id;send(ws,{type:'AUTH_LIBRARY',token:crypto.randomBytes(32).toString('hex')});}
-   else send(ws,{type:'JOIN_ROOM',roomId,nickname:`부하봇${String(index+1).padStart(3,'0')}`,avatarId:avatars[index%avatars.length]});
+   else send(ws,{type:'JOIN_ROOM',roomId,nickname:`부하봇${String(index+1).padStart(3,'0')}`,avatarId:avatars[index%avatars.length],worldDelta:true});
   }else if(m.type==='QUIZ_LIST'&&index===0&&!bootstrapStarted){
    bootstrapStarted=true;
-   send(ws,{type:'CREATE_ROOM',nickname:'부하봇001',avatarId:'woni',title:TITLE,targetWinners:1,restSeconds:10,questions:[
+   send(ws,{type:'CREATE_ROOM',nickname:'부하봇001',avatarId:'woni',worldDelta:true,title:TITLE,targetWinners:1,restSeconds:10,questions:[
     {type:'MINORITY',question:'숫자 안내 없이 적은 쪽을 골라 보세요. 봇 49명이 계속 이동합니다.',timeLimit:15},
     {type:'OX',question:'리센느 멤버는 5명이다.',answer:'O',timeLimit:15},
     {type:'MINORITY',question:'소수결 패자부활전! 유령 중 적은 쪽이 살아납니다.',isRevival:true,timeLimit:15},
@@ -44,12 +45,12 @@ function connectBot(index){return new Promise((resolve,reject)=>{
     {type:'SHORT',question:'대한민국의 수도는?',answer:'서울,서울특별시',timeLimit:15}
    ]});
   }else if(m.type==='JOINED_ROOM'){
-   if(index===0)roomId=m.roomId;clearTimeout(timeout);resolve(bot);
+   if(index===0){roomId=m.roomId;worldUpdates.reset();}clearTimeout(timeout);resolve(bot);
   }else if(m.type==='ROOM_STATE'){
    bot.state=m;
    const q=m.currentQuestion,key=`${m.gameId}:${q?.index}`;
    if(m.state==='QUESTION'&&bot.answerKey!==key){bot.answerKey=key;if(q.type==='SHORT')send(ws,{type:'SUBMIT_SHORT',answer:index%3?'서울':'부산'});if(q.type==='MULTIPLE'&&q.inputMode==='BUTTON')send(ws,{type:'SUBMIT_MULTIPLE',answer:String(index%4+1)});}
-  }else if(m.type==='WORLD_TICK'){const players=new Map(m.p.map(p=>[p.i,p]));for(const other of bots)other.player=players.get(other.id);}
+  }else if(m.type==='WORLD_TICK'||m.type==='WORLD_DELTA'){const list=worldUpdates.apply(m);if(list){const players=new Map(list.map(p=>[p.i,p]));for(const other of bots)other.player=players.get(other.id);}}
   else if(m.type==='ERROR'){clearTimeout(timeout);reject(new Error(m.message));}
  });
 });}

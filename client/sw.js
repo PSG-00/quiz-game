@@ -1,5 +1,5 @@
 // 모두의 퀴즈 PWA Service Worker
-const CACHE_NAME = 'quiz-game-cache-v1';
+const CACHE_NAME = 'quiz-game-cache-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -26,28 +26,37 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key.startsWith('quiz-game-cache-') && key !== CACHE_NAME).map((key) => caches.delete(key))
       );
     }).then(() => self.clients.claim())
   );
 });
 
-// Network-first strategy for dynamic gameplay, falling back to cache
+// Public assets may be reused for one hour. Code/shell still checks the network;
+// API responses and other origins are never stored in this application cache.
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests and http/https schemes
   if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
+  const url = new URL(event.request.url);
+  if(url.origin !== self.location.origin || url.pathname.startsWith('/api/') || event.request.headers.has('range'))return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => caches.match(event.request))
+    (async()=>{
+      const cache=await caches.open(CACHE_NAME);
+      if(url.pathname.startsWith('/assets/')){
+        const cached=await cache.match(event.request);
+        const savedAt=cached?Date.parse(cached.headers.get('Date')):NaN;
+        if(cached&&Number.isFinite(savedAt)&&Date.now()-savedAt<3600000)return cached;
+      }
+      try {
+        const response=await fetch(event.request);
+        if(response.status===200)event.waitUntil(cache.put(event.request,response.clone()).catch(()=>{}));
+        return response;
+      } catch(error) {
+        const cached=await cache.match(event.request);
+        if(cached)return cached;
+        throw error;
+      }
+    })()
   );
 });

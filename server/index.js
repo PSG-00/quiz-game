@@ -7,9 +7,11 @@ const {WebSocketServer}=require('ws');
 const {RoomManager}=require('./RoomManager');
 const {RoomStore}=require('./RoomStore');
 const {QuizLibrary,userHash}=require('./QuizLibrary');
+const {cacheControl}=require('./staticCache');
 const PORT=process.env.PORT||3000;
 const app=express();
-app.use(express.static(path.join(__dirname,'../client'),{etag:false,lastModified:false,setHeaders:res=>res.setHeader('Cache-Control','no-store')}));
+app.use('/api',(req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+app.use(express.static(path.join(__dirname,'../client'),{etag:true,lastModified:true,setHeaders:(res,file)=>res.setHeader('Cache-Control',cacheControl(file))}));
 const disabled=process.env.OX_DISABLE_PERSISTENCE==='1';
 const oldFile=disabled?null:(process.env.OX_DATA_FILE||path.join(__dirname,'../data/rooms.json'));
 const quizFile=disabled?null:(process.env.OX_QUIZ_FILE||(process.env.OX_DATA_FILE?process.env.OX_DATA_FILE+'.quizzes.json':path.join(__dirname,'../data/quizzes.json')));
@@ -117,7 +119,7 @@ wss.on('connection',ws=>{
   roomManager.cleanupEmptyRooms();publishRooms();
  }
  ws.leaveRoom=leave;
- send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true},rooms:roomManager.getRoomListSummary()});
+ send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true,worldDelta:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',raw=>{
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
   try{
@@ -159,6 +161,7 @@ wss.on('connection',ws=>{
      leave();
      evictDuplicateOwner(ownerHash,clientId);
      const room=roomManager.createRoom(draft,clientId);currentRoom=room;
+     ws.worldDeltaEnabled=msg.worldDelta===true;ws.worldSnapshotRoom=null;
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
      send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();publishRooms();break;
     }
@@ -167,8 +170,9 @@ wss.on('connection',ws=>{
      const inheritedHost=evictDuplicateOwner(ownerHash,clientId,room);
      const capacity=room.maxPlayers;
      if(!room.players.has(clientId)&&room.players.size>=capacity)throw new Error(`이 방은 최대 ${capacity}명까지 입장할 수 있어요.`);
-     if(currentRoom===room){send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();break;}
+     if(currentRoom===room){ws.worldDeltaEnabled=msg.worldDelta===true;ws.worldSnapshotRoom=null;send(ws,{type:'JOINED_ROOM',roomId:room.id,clientId});room.broadcastRoomEvent();break;}
      leave();currentRoom=room;
+     ws.worldDeltaEnabled=msg.worldDelta===true;ws.worldSnapshotRoom=null;
      if(inheritedHost||!room.hostId||!room.players.has(room.hostId))room.hostId=clientId;
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
      if(inheritedHost)room.hostId=clientId;

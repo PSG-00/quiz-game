@@ -66,7 +66,7 @@ test('최종 목표 초과 시 생존자만 추첨, 중복 당첨 없음',()=>{
 });
 test('다른 사용자에게 주관식 답안이나 버튼 선택값을 전송하지 않음',()=>{
  const r=setup({type:'SHORT',answer:'서울'});r.submitAnswer('p0','서울');r.state='JUDGE';
- let result;r.sendToAll=payload=>result=JSON.parse(payload);r.broadcastWorldTick();assert.equal(result.p[0].t,undefined);assert.equal(result.p[0].submittedText,undefined);assert.equal(result.p[0].h,1);
+ let result;r.players.get('p1').ws={readyState:1,send:payload=>result=JSON.parse(payload)};r.broadcastWorldTick();assert.equal(result.p[0].t,undefined);assert.equal(result.p[0].submittedText,undefined);assert.equal(result.p[0].h,1);
 });
 test('전원 오답: 마지막 문제·예약 부활전 여부와 무관하게 직전 생존 4명 중 목표 2명 추첨',()=>{
  const original=global.setTimeout;

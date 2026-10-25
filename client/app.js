@@ -37,6 +37,7 @@ let builderQuestions = [];
 
 // 플레이어 렌더링 엔티티 맵
 const playerEntities = new Map();
+const worldUpdates = WorldUpdates.create();
 
 // 내 캐릭터 로컬 위치
 let myPos = { x: -6, z: 0 };
@@ -984,6 +985,7 @@ function connectWebSocket() {
       }
 
       case 'JOINED_ROOM': {
+        worldUpdates.reset();
         lastSentPosKey='';lastSentPosTime=0;
         creatingRoomRequestId=null;updateSaveButtons();
         cameraFollow.initialized=false;cameraFollow.x=0;cameraFollow.targetX=0;
@@ -1001,9 +1003,12 @@ function connectWebSocket() {
         break;
       }
 
-      case 'WORLD_TICK': {
+      case 'WORLD_TICK':
+      case 'WORLD_DELTA': {
         if(!currentRoomId)break;
-        handleWorldTick(msg.p || []);
+        if(msg.roomId&&msg.roomId!==currentRoomId)break;
+        const players=worldUpdates.apply(msg);
+        if(players)handleWorldTick(players);
         break;
       }
 
@@ -1438,6 +1443,7 @@ function returnToLobby(){
  resetJoystick();
  closeChatPopup();
  currentRoomId=null;roomState=null;renderedPhaseKey=null;myMoveTarget=null;
+ worldUpdates.reset();
  lastSentPosKey='';lastSentPosTime=0;
  document.body.classList.remove('answer-mode','multiple-mode','move-answer-mode','break-mode');
  document.getElementById('game-hud').classList.add('hidden');
@@ -1570,7 +1576,7 @@ function initNickname() {
 window.joinRoom = function (roomId) {
   const nickname = getPlayerNickname();
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId, nickname,avatarId:AvatarPicker.selected() }));
+    ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId, nickname,avatarId:AvatarPicker.selected(),worldDelta:true }));
   }
 };
 
@@ -1578,7 +1584,7 @@ window.submitCreateRoom=function(){
  if(!validateQuizDraft()||!requireLibrary()||pendingQuizSaves.size||creatingRoomRequestId)return;
  saveQuizDraft();
  creatingRoomRequestId='create_'+(++saveSequence);updateSaveButtons();
- ws.send(JSON.stringify({type:'CREATE_ROOM',requestId:creatingRoomRequestId,...currentQuizPayload(),nickname:getPlayerNickname(),avatarId:AvatarPicker.selected()}));
+ ws.send(JSON.stringify({type:'CREATE_ROOM',requestId:creatingRoomRequestId,...currentQuizPayload(),nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),worldDelta:true}));
 };
 
 function escapeHtml(str) {

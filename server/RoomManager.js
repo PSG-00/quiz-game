@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const AvatarCatalog=require('../client/avatarCatalog');
 const QuizLimits=require('../client/quizLimits');
+const {WorldStream}=require('./WorldStream');
 
 // Answer stage and lower spectator floor use separate bounds.
 const ARENA_HALF_W = 10; // X: -10 ~ +10
@@ -104,6 +105,7 @@ class Room {
     for(const q of this.questions){const error=QuizLimits.error(q);if(error)throw new Error(error);}
     // 플레이어 맵: id -> player 객체
     this.players = new Map();
+    this.worldStream = new WorldStream();
     this.nextSpawnSlot = 0;
     this.roundParticipants = new Set();
     this.minorityOutcome=null;
@@ -623,12 +625,7 @@ class Room {
       });
     }
 
-    const payload = JSON.stringify({
-      type: 'WORLD_TICK',
-      p: playersCompact
-    });
-
-    this.sendToAll(payload);
+    this.worldStream.publish(this.id,playersCompact,[...this.players.values()].map(p=>p.ws));
   }
 
   sendToAll(jsonStr) {
