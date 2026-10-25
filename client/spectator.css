@@ -1,0 +1,12 @@
+#question-board .status-pill.bump { animation:none;transform:none; }
+.spectator-toolbar { order:4;grid-column:1 / -1;display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:3px 6px;font-size:11px;color:#52617a; }
+.spectator-toolbar[hidden] { display:none; }
+.spectator-toolbar>span { white-space:nowrap; }
+.spectator-toolbar select { min-width:0;max-width:200px;flex:1;border:1px solid #d4ddec;background:#fffdf8;color:#394b68;border-radius:6px;height:26px;padding:2px 7px;font-size:12px; }
+.spectator-toolbar button { width:27px;height:26px;padding:0;border:1px solid #d4ddec;border-radius:6px;background:#fffdf8;color:#394b68;cursor:pointer; }
+.spectator-toolbar button:disabled { opacity:.4;cursor:default; }
+.spectator-mode #btn-chat-toggle,.spectator-mode #chat-popup { display:none!important; }
+.player-name.is-spectated { outline:2px solid #739cda;background:#e9f2ff;color:#234e85; }
+@media(max-width:600px){
+ .spectator-toolbar { font-size:10px;gap:4px; }
+}

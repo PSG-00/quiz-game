@@ -90,6 +90,12 @@ async function main(){
   note('INPUT-01',alive?'PASS':'FAIL','비정상 메시지에도 서버가 종료되지 않음',{serverAlive:alive,exitCode:child.exitCode,invalidShapes:invalidMessages.length,brokenJson:true});assert.equal(alive,true);
   const chatBefore=guest.messages.filter(m=>m.type==='CHAT_MSG').length;for(let i=0;i<10;i++)send(host,{type:'CHAT',text:'빈도 점검 '+i});await sleep(100);
   const chats=guest.messages.filter(m=>m.type==='CHAT_MSG').length-chatBefore;assert.equal(chats,3);note('CHAT-01','PASS','채팅 10회 연속 발신 시 초기 허용량 3회만 방송',{sent:10,broadcast:chats});
+  const viewer=await connect(),viewerJoin=await join(viewer,rid);assert.equal(viewerJoin.type,'JOINED_ROOM');
+  const viewerBefore=(await control('snapshot',{roomId:rid})).players.find(p=>p.id===viewer.id),countBefore=guest.messages.filter(m=>m.type==='CHAT_MSG').length;
+  send(viewer,{type:'MOVE',x:3,z:9});send(viewer,{type:'CHAT',text:'관전자 정답 유출 시도'});await sleep(80);
+  const viewerAfter=(await control('snapshot',{roomId:rid})).players.find(p=>p.id===viewer.id);
+  assert.equal(viewerAfter.eligible,false);assert.equal(viewerAfter.x,viewerBefore.x);assert.equal(viewerAfter.z,viewerBefore.z);assert.equal(guest.messages.filter(m=>m.type==='CHAT_MSG').length,countBefore);
+  note('SPECTATOR-01','PASS','관전자의 직접 이동·채팅 패킷도 서버에서 차단',{});await close(viewer);
   // Host close and result judgement must not reset the ongoing question.
   const hostRound=await control('question',{roomId:rid,question:{type:'SHORT',answer:'서울'}});send(guest,{type:'SUBMIT_SHORT',answer:'서울',...context(hostRound)});
   await until(async()=>(await control('snapshot',{roomId:rid})).players.find(p=>p.id===guest.id).submitted);

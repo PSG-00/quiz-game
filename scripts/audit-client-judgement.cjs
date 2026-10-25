@@ -14,6 +14,17 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  await page.waitForFunction(()=>currentRoomId&&roomState?.state==='WAITING');const roomId=await page.evaluate(()=>currentRoomId),hostId=await page.evaluate(()=>myClientId);
  guest=new WebSocket('ws://127.0.0.1:'+port);let guestId;await new Promise((resolve,reject)=>{guest.on('error',reject);guest.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='WELCOME'){guestId=m.clientId;guest.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'다른 참가자',worldDelta:true}));}if(m.type==='JOINED_ROOM')resolve();});});
  await page.waitForFunction(()=>playerEntities.size===2);
+ const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
+ assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=1600000);
+ result.renderSettings=renderSettings;
+ if(!mobile){
+  result.resizeBudget=[];
+  for(const size of [{width:1920,height:1080},{width:2560,height:1440}]){
+   await page.setViewportSize(size);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=1600000);
+   result.resizeBudget.push(await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {width:innerWidth,height:innerHeight,pixels:size.x*size.y,ratio:renderer.getPixelRatio()};}));
+  }
+  await page.setViewportSize(viewport);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth);
+ }
  await control('question',{roomId,positions:{[hostId]:{x:1,z:0},[guestId]:{x:-2,z:0}}});await page.waitForFunction(()=>roomState?.state==='QUESTION');
  await page.evaluate(()=>{myPos.x=-.001;myPos.z=0;myMoveTarget=null;lastSentPosKey='';lastSentPosTime=0;});
  const rounded=await until(async()=>{const r=await control('snapshot',{roomId});const p=r.players.find(p=>p.id===hostId);return p.x===0?p:null;});
@@ -46,12 +57,33 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  assert.equal(await page.locator('#short-answer-input').inputValue(),'서울');
  result.reconnect={status:'PASS',samePlayerId:true,answer:'서울',socketReconnect:true,pageReload:true};
  const spectator=await browser.newPage({viewport,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+ spectator.on('pageerror',e=>errors.push('spectator: '+e.message));
  await spectator.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await spectator.goto(base);await spectator.waitForFunction(()=>libraryReady);
  await spectator.evaluate(rid=>ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:rid,nickname:'늦게 온 관전자',worldDelta:true})),roomId);
  await spectator.waitForFunction(()=>currentRoomId&&playerEntities.get(myClientId)?.eligible===false);
  assert.equal(await spectator.evaluate(()=>canAnswer()),false);await spectator.locator('#spectator-status').waitFor({state:'visible'});
  assert.equal(await spectator.evaluate(()=>computeOverheadBadge(playerEntities.get(myClientId)).text),'관전');
- result.spectator={status:'PASS',canAnswer:false,label:await spectator.locator('#spectator-status').textContent()};
+ assert.equal(await spectator.evaluate(()=>canMove()),false);assert.equal(await spectator.locator('#btn-chat-toggle').isVisible(),false);
+ await spectator.evaluate(()=>toggleChatPopup());assert.equal(await spectator.locator('#chat-popup').isVisible(),false);
+ assert.equal(await spectator.locator('#hud-spectator-count').count(),0);
+ assert.equal(await spectator.locator('#status-capsule .status-pill').count(),3);
+ await spectator.waitForFunction(()=>!playerEntities.get(myClientId).group.visible);
+ await spectator.selectOption('#spectate-target',guestId);await spectator.waitForFunction(id=>spectatorTargetId===id,guestId);
+ await control('patch',{roomId,players:{[guestId]:{x:8,z:0}}});
+ await spectator.waitForFunction(id=>playerEntities.get(id).x>7.9,guestId);
+ if(mobile)await spectator.waitForFunction(()=>Math.abs(cameraFollow.x-Math.min(cameraFollow.maxX,playerEntities.get(spectatorTargetId).x*layoutScaleX))<.3);
+ const selectedView=await spectator.evaluate(()=>({target:spectatorTargetId,cameraX:cameraFollow.x,portrait:cameraFollow.enabled}));
+ await control('judge',{roomId});await spectator.waitForFunction(id=>spectatorTargetId===id,hostId);
+ await spectator.waitForFunction(()=>document.getElementById('hud-ghost-count').textContent==='유령 1');
+ assert.equal(await spectator.evaluate(id=>computeOverheadBadge(playerEntities.get(id)).text,guestId),'유령');
+ await spectator.screenshot({path:'artifacts/spectator-view'+suffix+'.png'});
+ await control('patch',{roomId,players:{[hostId]:{alive:false}}});await spectator.waitForFunction(()=>spectatorTargetId===null);
+ assert.equal(await spectator.locator('#spectate-target').isDisabled(),true);
+ const header=await spectator.evaluate(()=>{const timer=document.getElementById('q-timer').getBoundingClientRect(),pills=[...document.querySelectorAll('#status-capsule .status-pill')].map(e=>e.getBoundingClientRect());return {pillsFit:pills.every((r,i)=>(r.right<=timer.left||r.top>=timer.bottom)&&(!i||pills[i-1].right+3.9<=r.left)),uniform:pills.every(r=>Math.abs(r.width-pills[0].width)<1&&r.height===pills[0].height),font:parseFloat(getComputedStyle(document.querySelector('.status-pill')).fontSize),bounds:pills.map(r=>({left:r.left,right:r.right,width:r.width,height:r.height})),timerLeft:timer.left};});assert.equal(header.pillsFit,true,JSON.stringify(header));assert.equal(header.bounds.length,3);assert.ok(header.font>=9);
+ if(mobile){await spectator.setViewportSize({width:320,height:700});await sleep(200);const fits=await spectator.evaluate(()=>{const timer=document.getElementById('q-timer').getBoundingClientRect(),pills=[...document.querySelectorAll('#status-capsule .status-pill')].map(e=>e.getBoundingClientRect());return pills.every((r,i)=>r.right<=timer.left&&(!i||pills[i-1].right+3.9<=r.left));});assert.equal(fits,true,'320px header fit');await spectator.screenshot({path:'artifacts/spectator-320.png'});}
+ await control('reset',{roomId});await spectator.waitForFunction(()=>!document.body.classList.contains('spectator-mode'));
+ assert.equal(await spectator.locator('#btn-chat-toggle').isVisible(),true);assert.equal(await spectator.locator('#spectator-status').isVisible(),false);
+ result.spectator={status:'PASS',canAnswer:false,canMove:false,chatHidden:true,ownAvatarHidden:true,selectedView,autoSwitchOnDeath:true,emptyFallback:true,unlockedOnReset:true,header};
  await spectator.evaluate(()=>leaveRoom());await spectator.close();
  // A former round's ACK cannot mark the new question as submitted in the UI.
  const next=await control('question',{roomId,index:1,question:{type:'SHORT',answer:'부산',timeLimit:60},duration:60000});

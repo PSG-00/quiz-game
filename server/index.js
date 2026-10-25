@@ -220,8 +220,7 @@ wss.on('connection',ws=>{
      if(moved===false){const p=currentRoom.players.get(clientId);send(ws,{type:'MOVE_CORRECTION',roomId:currentRoom.id,x:p.x,z:p.z});}
     }break;
     case 'CHAT': {
-     const player=currentRoom?.players.get(clientId),text=String(msg.text||'').trim().slice(0,40);
-     if(player&&text)currentRoom.sendToAll(JSON.stringify({type:'CHAT_MSG',senderId:clientId,senderName:player.name,text}));break;
+     currentRoom?.chat(clientId,msg.text);break;
     }
     case 'SUBMIT_SHORT':case 'SUBMIT_MULTIPLE':if(matchesRound(msg))currentRoom.submitAnswer(clientId,msg.answer);break;
     case 'ANSWER_EDITING':if(matchesRound(msg))currentRoom.submitAnswer(clientId,'',true);break;

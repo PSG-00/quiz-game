@@ -89,3 +89,11 @@ test('요청 제한: 연속 채팅 초과 거절, 시간 경과 시 회복하고
  const limits=new RequestLimits();for(let i=0;i<3;i++)assert.equal(limits.allow('chat',1,3,1000),true);
  assert.equal(limits.allow('chat',1,3,1000),false);assert.equal(limits.allow('move',30,10,1000),true);assert.equal(limits.allow('chat',1,3,2000),true);
 });
+
+test('관전자의 직접 이동·채팅 요청은 서버에서 차단하고 기존 유령의 이동·채팅은 허용',t=>{
+ const r=room(t);open(r);const viewer=r.addPlayer('viewer','관전자'),ghost=r.players.get('b');ghost.alive=false;r.roundParticipants.delete('b');r.placePlayerInRoleZone(ghost);
+ const before={x:viewer.x,z:viewer.z};r.movePlayer(viewer.id,3,9);assert.deepEqual({x:viewer.x,z:viewer.z},before);
+ const messages=[];r.sendToAll=raw=>messages.push(JSON.parse(raw));assert.equal(r.chat(viewer.id,'정답은 O'),false);assert.equal(messages.length,0);
+ r.movePlayer(ghost.id,3,9);assert.equal(ghost.x,3);assert.equal(r.chat(ghost.id,'유령 채팅'),true);assert.equal(messages[0].senderId,ghost.id);
+ r.resetToWaiting();assert.equal(r.chat(viewer.id,'다음 게임 대기'),true);
+});

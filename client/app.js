@@ -31,6 +31,7 @@ const winnerNoticeGate = QuizResultNotices.createGate(resultStorage);
 // 상태판 이전 인원 (탈락/부활 시 숫자 강조 애니메이션용)
 let prevAliveCount = -1;
 let prevGhostCount = -1;
+let spectatorTargetId=null,spectatorOptionsKey='',wasSpectator=false;
 
 // 방 만들기 퀴즈 빌더 목록
 let builderQuestions = [];
@@ -84,22 +85,19 @@ scene.background = new THREE.Color(0xeee8e2);
 
 
 const camera = new THREE.PerspectiveCamera(42,window.innerWidth/window.innerHeight,.1,600);
-const mobilePerformance=matchMedia('(pointer:coarse)').matches||(navigator.maxTouchPoints>0&&Math.min(innerWidth,innerHeight)<850);
 let lowSpecMode=false;
 try{lowSpecMode=localStorage.getItem('ox-low-spec-v1')==='1';}catch{}
 // Shared batches are allocated once on PC and mobile. Detail restoration is
 // spread across frames, keeping the local player's model independent.
 MobileCrowd.attach(scene);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-const sceneAntialias=SceneAntialias.create(renderer,!mobilePerformance);
 InstancedAvatars.attach(scene,renderer);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(mobilePerformance?Math.min(2,window.devicePixelRatio,Math.sqrt(1600000/(innerWidth*innerHeight))):Math.min(window.devicePixelRatio,2));
+renderer.setPixelRatio(RenderBudget.pixelRatio(innerWidth,innerHeight,devicePixelRatio));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = !mobilePerformance;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = false;
 container.appendChild(renderer.domElement);
 const nameplates = document.createElement('div');
 nameplates.id = 'player-names';
@@ -113,12 +111,7 @@ scene.add(ambientLight);
 
 const dirLight = new THREE.DirectionalLight(0xfff9f4, 0.75);
 dirLight.position.set(12, 42, 26);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(2048, 2048);
-Object.assign(dirLight.shadow.camera, {left:-30, right:30, top:30, bottom:-30, far:100});
-dirLight.shadow.normalBias = .04;
-dirLight.shadow.bias = -.0002;
-dirLight.shadow.radius = 4;
+dirLight.castShadow = false;
 scene.add(dirLight);
 
 const worldGroup = new THREE.Group();
@@ -421,7 +414,8 @@ function fitStageCamera(w,h){
 }
 function updateFollowCamera(dt,restore=false){
   if(!cameraFollow.enabled){cameraFollow.x=0;cameraFollow.targetX=0;camera.position.x=0;camera.updateMatrixWorld(true);return;}
-  const mine=currentRoomId?playerEntities.get(myClientId):null;
+  const self=currentRoomId?playerEntities.get(myClientId):null;
+  const mine=self?.eligible===false?playerEntities.get(spectatorTargetId):self;
   if(mine&&currentRoomId){
     const worldX=mine.x*layoutScaleX;
     if(!cameraFollow.initialized){cameraFollow.x=cameraFollow.targetX=worldX;cameraFollow.initialized=true;}
@@ -430,7 +424,7 @@ function updateFollowCamera(dt,restore=false){
     const deadZone=Math.max(.3,depth*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect*.16);
     if(worldX>cameraFollow.targetX+deadZone)cameraFollow.targetX=worldX-deadZone;
     else if(worldX<cameraFollow.targetX-deadZone)cameraFollow.targetX=worldX+deadZone;
-  }
+  }else cameraFollow.targetX=0;
   cameraFollow.targetX=THREE.MathUtils.clamp(cameraFollow.targetX,-cameraFollow.maxX,cameraFollow.maxX);
   cameraFollow.x=THREE.MathUtils.clamp(cameraFollow.x,-cameraFollow.maxX,cameraFollow.maxX);
   if(!restore)cameraFollow.x+=(cameraFollow.targetX-cameraFollow.x)*(1-Math.exp(-7*dt));
@@ -481,7 +475,8 @@ function updateCameraForScreen() {
   }
   // setSize clears the drawing buffer even when its dimensions did not change.
   const renderSize=renderer.getSize(new THREE.Vector2());
-  if(renderSize.x!==w||renderSize.y!==h){renderer.setSize(w,h);sceneAntialias.render(scene,camera);}
+  const ratio=RenderBudget.pixelRatio(w,h,devicePixelRatio);
+  if(renderSize.x!==w||renderSize.y!==h||Math.abs(renderer.getPixelRatio()-ratio)>.001){renderer.setPixelRatio(ratio);renderer.setSize(w,h);renderer.render(scene,camera);}
   if(isSceneInputFocused()&&!chatSceneLayout)freezeSceneForInput();
 }
 window.addEventListener('resize', updateCameraForScreen);
@@ -510,14 +505,7 @@ document.getElementById('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ==================== 3. 플레이어 엔티티 & 나만 보이는 금빛 이중 링 ====================
-const shadowGeo = new THREE.CircleGeometry(0.75, 24);
-const shadowMat = new THREE.MeshBasicMaterial({
-  color: 0x2e2540,
-  transparent: true,
-  opacity: 0.28,
-  depthWrite: false
-});
-CrowdDecorations.attach(scene,shadowGeo,shadowMat);
+CrowdDecorations.attach(scene);
 
 const goldRingGeo = new THREE.PlaneGeometry(2.8, 2.8);
 
@@ -535,8 +523,8 @@ function getOrCreatePlayerEntity(p) {
   group.position.set(p.x, floorY, p.z);
 
   // 다른 캐릭터 발밑에는 식별 링을 그리지 않고 접지 그림자만 사용한다!
-  const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-  if(!isMe)shadowMesh.visible=false;
+  const shadowMesh = new THREE.Group();
+  shadowMesh.visible=false;
   shadowMesh.rotation.x = -Math.PI / 2;
   shadowMesh.position.y = 0.04;
   group.add(shadowMesh);
@@ -561,7 +549,7 @@ function getOrCreatePlayerEntity(p) {
   const avatarId=AvatarCatalog.normalize(p.av);
   const avatarSeed=p.s;
   const lowDetail=!isMe&&lowSpecMode;
-  const charSprite = lowDetail?MobileCrowd.create(avatarId,avatarSeed):isMe?AvatarActors.create(avatarSeed,avatarId):AvatarActors.pending(avatarId);
+  const charSprite = p.el===0?AvatarActors.pending(avatarId):lowDetail?MobileCrowd.create(avatarId,avatarSeed):isMe?AvatarActors.create(avatarSeed,avatarId):AvatarActors.pending(avatarId);
   group.add(charSprite);
   const avatarScale = onStage ? 1 : .75;
   charSprite.scale.setScalar(avatarScale);
@@ -627,6 +615,8 @@ function getOrCreatePlayerEntity(p) {
     targetZ: p.z,
     targetY: floorY,
     alive: Boolean(p.a),
+    eligible:p.el!==0,
+    connected:p.c!==0,
     onStage,
     seed: avatarSeed,
     zoneId: p.zId || 'O',
@@ -657,7 +647,7 @@ function computeOverheadBadge(entity) {
 
   // 무대 아래 관전 구역에 있는 경우 (일반 라운드의 유령 또는 패자부활전의 생존자)
   if (!entity.onStage) {
-    return { text: '관전', theme: 'GHOST' };
+    return { text: entity.alive?'생존 · 대기':'유령', theme: 'GHOST' };
   }
   if(state==='BREAK')return {text:'휴식',theme:'MINORITY'};
   if(q?.type==='MINORITY')return {text:entity.zoneId==='LEFT'?'왼쪽':'오른쪽',theme:'MINORITY'};
@@ -706,6 +696,7 @@ function disposeEntityAvatar(entity){
   entity.detailedAvatar=null;entity.simpleAvatar=null;
 }
 function setEntityDetail(entity,simple){
+  if(entity.eligible===false)return;
   if(entity.id===myClientId)simple=false;
   if(simple){
     if(!entity.simpleAvatar){entity.simpleAvatar=MobileCrowd.create(entity.avatarId,entity.seed);entity.group.add(entity.simpleAvatar);}
@@ -727,7 +718,7 @@ function restoreAvatarDetails(){
   if(lowSpecMode)return;
   const deadline=performance.now()+3;let restored=0;
   for(const entity of playerEntities.values()){
-    if(entity.id===myClientId)continue;
+    if(entity.id===myClientId||entity.eligible===false)continue;
     const model=AvatarActors.model(entity.avatarId);
     if(model&&!model.loaded)continue;
     const upgrade=!entity.lowDetail&&(entity.charSprite.userData.pendingModel||!entity.charSprite.userData.importedGLB&&model?.loaded);
@@ -835,6 +826,11 @@ function animate(frameTime) {
   // 2) 모든 캐릭터 위치 보간 및 금빛 링 애니메이션
   const viewWidth = container.clientWidth, viewHeight = container.clientHeight;
   for (const entity of playerEntities.values()) {
+    if(entity.eligible===false){
+      entity.group.visible=false;entity.nameLabel.style.visibility='hidden';entity.chatBubble.classList.add('hidden');
+      if(entity.lowDetail)MobileCrowd.hide(entity.charSprite);else if(entity.charSprite.userData.instancedAvatar)InstancedAvatars.hide(entity.charSprite);
+      continue;
+    }
     const dx = entity.targetX - entity.x;
     const dz = entity.targetZ - entity.z;
     const dy = entity.targetY - entity.y;
@@ -863,13 +859,12 @@ function animate(frameTime) {
     const inView=entity.id===myClientId||avatarFrustum.intersectsSphere(avatarSphere);entity.group.visible=inView;
     if(!inView){if(entity.lowDetail)MobileCrowd.hide(entity.charSprite);else if(entity.charSprite.userData.instancedAvatar)InstancedAvatars.hide(entity.charSprite);entity.nameLabel.style.visibility='hidden';entity.chatBubble.classList.add('hidden');continue;}
     if(entity.lowDetail){entity.charSprite.rotation.y=0;MobileCrowd.update(entity.charSprite,!entity.alive,entity.motion.heading,now,entity.motion);}
-    else if(entity.charSprite.userData.instancedAvatar||!mobilePerformance||entity.id===myClientId||now-entity.lastPose>33){window.AvatarActors.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);entity.lastPose=now;}
+    else if(entity.charSprite.userData.instancedAvatar||entity.id===myClientId||now-entity.lastPose>33){window.AvatarActors.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);entity.lastPose=now;}
     // Keep bodies and local controls at display rate. Remote DOM nameplates and
     // chat layout need at most 30 Hz, including on desktop with 100 players.
-    if(mobilePerformance&&entity.id!==myClientId&&frameNumber%3)continue;
-    if(!mobilePerformance&&entity.id!==myClientId){
+    if(entity.id!==myClientId){
       if(!entity.nextLabelAt)entity.nextLabelAt=now+(entity.seed%4)*8;
-      if(now<entity.nextLabelAt)continue;
+      if(frameNumber%3||now<entity.nextLabelAt)continue;
       entity.nextLabelAt=now+1000/30;
     }
     const displayHeight=(entity.charSprite.userData.displayHeight||entity.charSprite.userData.visualHeight||2.95)*entity.avatarScale;
@@ -951,7 +946,7 @@ function animate(frameTime) {
   MobileCrowd.flush();
   InstancedAvatars.flush(camera,renderer.domElement.clientHeight);
   CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
-  sceneAntialias.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
 requestAnimationFrame(animate);
@@ -1107,9 +1102,13 @@ function handleWorldTick(compactList) {
     if(p.el!==0){if (p.a) aliveCount++;else ghostCount++;}
 
     const entity = getOrCreatePlayerEntity(p);
+    const wasEligible=entity.eligible;
+    entity.eligible=p.el!==0;
     const avatarId=AvatarCatalog.normalize(p.av);
     if(entity.avatarId!==avatarId){
       disposeEntityAvatar(entity);entity.avatarId=avatarId;entity.seed=p.s;
+      setEntityDetail(entity,entity.id!==myClientId&&lowSpecMode);
+    }else if(wasEligible===false&&entity.eligible){
       setEntityDetail(entity,entity.id!==myClientId&&lowSpecMode);
     }else if(entity.id===myClientId&&window.AvatarModels?.[avatarId]?.loaded&&!entity.charSprite.userData.importedGLB){
       setEntityDetail(entity,false);
@@ -1135,8 +1134,6 @@ function handleWorldTick(compactList) {
     if (p.i === myClientId) {
       const label = document.getElementById('local-answer-state');
       if (label) label.textContent = p.e ? '수정 중 · 다시 제출해 주세요' : p.h ? '✓ 제출 완료 · 마감 전 변경 가능' : '나만 보이는 비공개 답안';
-      const spectatorBadge=document.getElementById('spectator-status');
-      if(spectatorBadge){spectatorBadge.hidden=p.el!==0;spectatorBadge.textContent='관전 중 · 다음 게임부터 참여 가능';}
     }
 
     if (p.i !== myClientId) {
@@ -1157,20 +1154,21 @@ function handleWorldTick(compactList) {
 
   // 상태판 갱신 및 인원 변동 시 강조 애니메이션
   if (aliveCount !== prevAliveCount) {
-    document.getElementById('hud-alive-count').textContent = `생존 ${aliveCount}`;
+    document.getElementById('hud-alive-count').textContent=`생존 ${aliveCount}`;
     if (prevAliveCount !== -1) triggerPillBump('pill-alive');
     prevAliveCount = aliveCount;
   }
   if (ghostCount !== prevGhostCount) {
-    document.getElementById('hud-ghost-count').textContent = `유령 ${ghostCount}`;
+    document.getElementById('hud-ghost-count').textContent=`유령 ${ghostCount}`;
     if (prevGhostCount !== -1) triggerPillBump('pill-ghost');
     prevGhostCount = ghostCount;
   }
+  syncSpectatorView();
   if(hadSpectators !== [...playerEntities.values()].some(entity=>!entity.onStage))requestAnimationFrame(updateCameraForScreen);
 }
 
 function handleRoomStateUpdate(stateMsg) {
-  document.getElementById('hud-target-count').textContent = `목표 ${stateMsg.targetWinners}명`;
+  document.getElementById('hud-target-count').textContent=`목표 ${stateMsg.targetWinners}명`;
 
   const isHost = stateMsg.hostId === myClientId;
   document.getElementById('btn-modal-restart').classList.toggle('hidden',!isHost);
@@ -1337,7 +1335,7 @@ function handleRoomStateUpdate(stateMsg) {
   const answering = stateMsg.state === 'QUESTION';
   document.body.classList.toggle('break-mode',stateMsg.state==='BREAK');
   const mine = playerEntities.get(myClientId);
-  const eligible = mine ? (q?.isRevival ? !mine.alive : mine.alive) : false;
+  const eligible = mine&&mine.eligible!==false ? (q?.isRevival ? !mine.alive : mine.alive) : false;
   const privateMode = q && (q.type === 'SHORT' || (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE'));
   topChoicesBar.classList.toggle('hidden', !(answering && q?.type === 'MULTIPLE' && q.inputMode === 'MOVE'));
   shortPanel.classList.toggle('hidden', !(answering && eligible && q?.type === 'SHORT'));
@@ -1354,6 +1352,36 @@ function handleRoomStateUpdate(stateMsg) {
     updatePlayerOverheadIfNeeded(ent);
   }
 }
+
+function syncSpectatorView(){
+  const observing=playerEntities.get(myClientId)?.eligible===false;
+  document.body.classList.toggle('spectator-mode',observing);
+  document.getElementById('spectator-status').hidden=!observing;
+  if(observing!==wasSpectator){cameraFrame=null;cameraFollow.initialized=false;wasSpectator=observing;requestAnimationFrame(updateCameraForScreen);}
+  if(!observing){if(spectatorTargetId)for(const p of playerEntities.values())p.nameLabel.classList.remove('is-spectated');spectatorTargetId=null;spectatorOptionsKey='';return;}
+  if(!document.getElementById('chat-popup').classList.contains('hidden'))closeChatPopup();
+  const players=[...playerEntities.values()],list=SpectatorView.candidates(players),target=SpectatorView.pick(players,spectatorTargetId);
+  if(target!==spectatorTargetId){spectatorTargetId=target;cameraFollow.initialized=false;}
+  const select=document.getElementById('spectate-target'),key=JSON.stringify(list.map(p=>[p.id,p.name]));
+  if(key!==spectatorOptionsKey){
+    select.replaceChildren();
+    if(!list.length)select.add(new Option('생존자 없음 · 전체 무대',''));
+    else for(const p of list)select.add(new Option(p.name,p.id));
+    spectatorOptionsKey=key;
+  }
+  select.value=spectatorTargetId||'';select.disabled=!list.length;
+  document.getElementById('spectate-prev').disabled=list.length<2;document.getElementById('spectate-next').disabled=list.length<2;
+  for(const p of players)p.nameLabel.classList.toggle('is-spectated',p.id===spectatorTargetId);
+}
+window.selectSpectator=function(id){
+  if(playerEntities.get(myClientId)?.eligible!==false)return;
+  spectatorTargetId=SpectatorView.pick(playerEntities.values(),id);cameraFollow.initialized=false;syncSpectatorView();
+  document.getElementById('spectate-target').blur();
+};
+window.cycleSpectator=function(direction){
+  if(playerEntities.get(myClientId)?.eligible!==false)return;
+  selectSpectator(SpectatorView.cycle(playerEntities.values(),spectatorTargetId,direction));
+};
 
 function updateTimerDisplay() {
   const timerEl = document.getElementById('q-timer');
@@ -1401,6 +1429,7 @@ function canAnswer() {
 }
 function canMove() {
   if (!currentRoomId || isInputFocused()) return false;
+  if(playerEntities.get(myClientId)?.eligible===false)return false;
   if (['WAITING','BREAK'].includes(roomState?.state)) return true;
   if (roomState?.state !== 'QUESTION' || Date.now() - serverTimeOffset >= roomState.stateEndTime) return false;
   const q = roomState.currentQuestion, mine = playerEntities.get(myClientId);
@@ -1438,6 +1467,7 @@ function closeChatPopup(){
   requestAnimationFrame(updateCameraForScreen);
 }
 window.toggleChatPopup = function () {
+  if(playerEntities.get(myClientId)?.eligible===false)return;
   const popup = document.getElementById('chat-popup');
   if (!popup) return;
   if(!popup.classList.contains('hidden')){closeChatPopup();return;}
@@ -1447,6 +1477,7 @@ window.toggleChatPopup = function () {
 };
 
 window.sendChatMessage = function () {
+  if(playerEntities.get(myClientId)?.eligible===false)return;
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text || !ws) return;

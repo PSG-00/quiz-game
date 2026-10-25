@@ -568,7 +568,7 @@ class Room {
   // Server owns role bounds and answer deadlines.
   movePlayer(clientId, nx, nz, {enforceSpeed=false,now=Date.now()}={}) {
     const p = this.players.get(clientId);
-    if (!p) return;
+    if (!p||p.eligible===false) return;
     if (!Number.isFinite(nx) || !Number.isFinite(nz)) return;
 
     if (['PREPARING', 'JUDGE', 'LOTTERY', 'ENDED'].includes(this.state)) return;
@@ -586,6 +586,13 @@ class Room {
       p.moveCredit=Math.max(0,p.moveCredit-distance);
     }
     p.x=nx;p.z=nz;return true;
+  }
+
+  chat(clientId,text){
+    const p=this.players.get(clientId);
+    if(!p||p.eligible===false||p.connected===false||typeof text!=='string')return false;
+    text=Array.from(text.trim()).slice(0,40).join('');if(!text)return false;
+    this.sendToAll(JSON.stringify({type:'CHAT_MSG',senderId:p.id,senderName:p.name,text}));return true;
   }
 
   submitAnswer(id, answer, editing = false) {

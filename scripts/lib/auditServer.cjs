@@ -9,6 +9,12 @@ process.on('message',message=>{try{
  const room=manager?.getRoom(message.roomId);let result;
  if(message.command==='rooms')result=manager?[...manager.rooms.values()].map(view):[];
  else if(message.command==='snapshot')result=view(room);
+ else if(message.command==='patch'){
+  for(const [id,patch] of Object.entries(message.players||{})){const p=room.players.get(id);if(p){Object.assign(p,patch);room.placePlayerInRoleZone(p);}}
+  room.broadcastWorldTick();result=view(room);
+ }else if(message.command==='reset'){
+  room.resetToWaiting();room.broadcastWorldTick();result=view(room);
+ }
  else if(message.command==='question'){
   if(room.timerHandle)clearTimeout(room.timerHandle);
   const index=message.index??0;room.questions[index]={type:'OX',answer:'O',choices:[],timeLimit:15,question:'점검',...message.question,index};

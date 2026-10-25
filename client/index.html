@@ -15,7 +15,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
-  <link rel="stylesheet" href="./style.css?v=33" />
+  <link rel="stylesheet" href="./style.css?v=34" />
+  <link rel="stylesheet" href="./spectator.css?v=2" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -216,7 +217,12 @@
         </div>
       </div>
       <!-- 패자부활전 중 우측에 뜨는 역할 교대 배지 (시안 04번) -->
-      <div id="spectator-status" hidden style="font-size:12px;text-align:center;color:#644d87;font-weight:700">관전 중 · 다음 게임부터 참여 가능</div>
+      <div id="spectator-status" class="spectator-toolbar hud-interactive" hidden>
+        <span>관전 중 · 채팅 불가</span>
+        <button id="spectate-prev" type="button" onclick="cycleSpectator(-1)" aria-label="이전 생존자 관전">‹</button>
+        <select id="spectate-target" aria-label="관전할 생존자" onchange="selectSpectator(this.value)"></select>
+        <button id="spectate-next" type="button" onclick="cycleSpectator(1)" aria-label="다음 생존자 관전">›</button>
+      </div>
       <div id="revival-role-badge" class="revival-role-badge hidden">
         <div class="role-row ghost-up">👻 유령 ↑ 무대 참가</div>
         <div class="role-row alive-down">👤 생존자 ↓ 관전</div>
@@ -321,7 +327,7 @@
     <p>문제 결과 생존자가 당첨 목표 <strong>이하</strong>가 되면<br>남은 생존자 모두 즉시 당첨돼요.</p>
     <p>마지막 문제 후 목표를 초과하면<br>생존자 중 목표 인원을 추첨해요.</p>
     <p>모두 오답이면 직전 생존자를 기준으로 종료해요.<br>목표보다 많으면 그중 목표 인원을 추첨해요.</p>
-    <p class="intro-secondary">처음부터 참가한 사람은 탈락해도 패자부활전에 도전할 수 있어요.<br>진행 중 입장하거나 퇴장 후 다시 오면 이번 게임은 관전만 가능해요.</p>
+    <p class="intro-secondary">처음부터 참가한 사람은 탈락해도 패자부활전에 도전할 수 있어요.<br>중도 입장자는 생존자를 따라보는 관전만 가능하고 이동·채팅은 할 수 없어요.</p>
     <p class="intro-secondary">연결이 잠시 끊기면 30초 안에 복귀할 수 있어요.<br>그동안에도 문제와 서버 판정은 계속돼요.</p>
     <button onclick="this.closest('dialog').close()">알겠어요, 준비됐어요!</button>
   </dialog>
@@ -403,13 +409,13 @@
   <script src="./resultNotifications.js?v=1"></script>
   <script src="./mobileCrowd.js?v=4"></script>
   <script src="./framePacing.js?v=1"></script>
-  <script src="./vendor/FXAAShader.js"></script>
-  <script src="./sceneAntialias.js?v=2"></script>
-  <script src="./crowdDecorations.js?v=1"></script>
+  <script src="./renderBudget.js?v=1"></script>
+  <script src="./crowdDecorations.js?v=2"></script>
   <script src="./showHost.js?v=1"></script>
   <script src="./worldUpdates.js?v=1"></script>
   <script src="./arenaRules.js?v=1"></script>
-  <script src="./app.js?v=55"></script>
+  <script src="./spectatorView.js?v=1"></script>
+  <script src="./app.js?v=58"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
