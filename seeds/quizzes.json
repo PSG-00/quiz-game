@@ -1204,7 +1204,7 @@
         },
         {
           "type": "OX",
-          "question": "[★패자부활전★] 그룹명 RESCENE은 Scene(장면)과 Scent(향)를 합쳐 향기로 장면을 떠올린다는 뜻이다.",
+          "question": "[★패자부활전★] 리센느(RESCENE)는 'Scene(장면)'과 'Scent(향)'의 결합으로 음악을 통해 마음에 생생한 장면을 그려낸다는 의미를 담고 있다.",
           "answer": "O",
           "choices": [
             "",
@@ -1367,7 +1367,7 @@
       "owners": [
         "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc"
       ],
-      "updatedAt": "2026-10-25T18:23:20.652Z"
+      "updatedAt": "2026-10-25T18:27:52.492Z"
     }
   ],
   "deletedQuizIds": [
