@@ -1060,7 +1060,7 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "리센느(RESCENE)의 공식 팬덤 이름(애칭: 레미니)은 무엇일까요?",
+          "question": "리센느(RESCENE)의 공식 팬덤 이름은 무엇일까요?",
           "answer": "1",
           "choices": [
             "리마인 (REMINE)",
@@ -1091,14 +1091,14 @@
           "caseSensitive": false
         },
         {
-          "type": "SHORT",
-          "question": "리센느 멤버 중 2004년생 맏언니이자 팀의 든든한 리더를 맡고 있는 멤버는?",
-          "answer": "원이, 정원이, WONI, woni",
+          "type": "MULTIPLE",
+          "question": "[기록 킬러] 리센느가 음원 역주행으로 역사적인 첫 멜론 TOP 100 1위를 달성하기까지 공식 데뷔일로부터 정확히 며칠이 걸렸을까요?",
+          "answer": "1",
           "choices": [
-            "",
-            "",
-            "",
-            ""
+            "835일 (2026년 7월 8일)",
+            "742일 (2026년 4월 6일)",
+            "910일 (2026년 9월 21일)",
+            "800일 (2026년 6월 3일)"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1124,7 +1124,7 @@
         },
         {
           "type": "OX",
-          "question": "나무위키 여담: 리센느 멤버 5명 전원은 형제자매 중 언니와 남동생이 한 명도 없다.",
+          "question": "리센느 멤버 5명 전원은 형제자매 중 언니와 남동생이 한 명도 없다.",
           "answer": "O",
           "choices": [
             "",
@@ -1141,7 +1141,7 @@
         {
           "type": "SHORT",
           "question": "멤버 미나미가 데뷔 전 파이널 생방송 무대(TOP 14)까지 진출했던 MBC 아이돌 서바이벌 프로그램 이름은?",
-          "answer": "방과후 설렘, 방과후설렘",
+          "answer": "방과후 설렘, 방과후설렘, 방설",
           "choices": [
             "",
             "",
@@ -1156,13 +1156,13 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "미니 1집 《SCENEDROME》에서 역주행곡 LOVE ATTACK과 함께 더블 타이틀로 수록된 선공개 곡은?",
+          "question": "[음방 기록] 리센느가 데뷔 후 모든 방송을 통틀어 생애 첫 음악 방송 1위(1등)를 수상한 방송 프로그램과 곡명은?",
           "answer": "1",
           "choices": [
-            "Pinball",
-            "New World",
-            "Lucky you",
-            "YoYo"
+            "SBS M 《더 쇼》 - Pretty Girl",
+            "MBC 《쇼! 음악중심》 - LOVE ATTACK",
+            "SBS 《인기가요》 - LOVE ATTACK",
+            "Mnet 《엠카운트다운》 - UhUh"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1188,7 +1188,7 @@
         },
         {
           "type": "SHORT",
-          "question": "[나무위키 킬러] 경기도 수원 출신 리브(LIV)가 고향 명물 음식과 본인의 갸루 성향을 합쳐 얻은 별명은? (수원 OOOOO)",
+          "question": "경기도 수원 출신 리브(LIV)가 고향 명물 음식과 갸루를 합쳐 얻은 별명은? (수원OOOO)",
           "answer": "왕갸루비, 수원 왕갸루비, 수원왕갸루비, 갸루비",
           "choices": [
             "",
@@ -1204,7 +1204,7 @@
         },
         {
           "type": "OX",
-          "question": "[★단 한 번의 패자부활전★] 그룹명 RESCENE은 Scene(장면)과 Scent(향)를 합쳐 향기로 장면을 떠올린다는 뜻이다.",
+          "question": "[★패자부활전★] 그룹명 RESCENE은 Scene(장면)과 Scent(향)를 합쳐 향기로 장면을 떠올린다는 뜻이다.",
           "answer": "O",
           "choices": [
             "",
@@ -1220,7 +1220,7 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "멤버 중 리브·미나미·제나가 한림예고를 중퇴하여, 팀 내 유일한 고졸 및 최고 학력자가 된 멤버는?",
+          "question": "팀 내 유일한 고졸 멤버는?",
           "answer": "1",
           "choices": [
             "원이",
@@ -1235,9 +1235,9 @@
           "caseSensitive": false
         },
         {
-          "type": "OX",
-          "question": "미니 1집 《SCENEDROME》의 콘셉트로 매칭된 메인 시그니처 향기는 용연향(Ambergris)이다.",
-          "answer": "O",
+          "type": "SHORT",
+          "question": "싱글 1집인 Re:Scene의 콘셉트 향기는? (OOO향)",
+          "answer": "플로럴, 플로럴향, 플로럴 향, floral, Floral, FLORAL, florar, Florar, FLORAR",
           "choices": [
             "",
             "",
@@ -1252,13 +1252,13 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "한국인 멤버 메이(MAY)가 나무위키에 이토 메이라는 별명이 붙은 이유는?",
+          "question": "[지상파 기록] 리센느가 지상파 음악 방송에서 사상 처음으로 1위를 차지했던 프로그램과 곡명은?",
           "answer": "1",
           "choices": [
-            "한국어 발음이 일본인 미나미보다 어눌할 때가 있어서",
-            "일본 도쿄에서 3년간 유학 생활을 해서",
-            "미나미와 친자매처럼 외모가 닮아서",
-            "일본 애니메이션 마니아라서"
+            "MBC 《쇼! 음악중심》 - Pretty Girl",
+            "SBS 《인기가요》 - LOVE ATTACK",
+            "KBS2 《뮤직뱅크》 - Pretty Girl",
+            "MBC 《쇼! 음악중심》 - LOVE ATTACK"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1267,14 +1267,14 @@
           "caseSensitive": false
         },
         {
-          "type": "OX",
-          "question": "리센느의 공식 영문 로고 표기에는 영어 발음 오독(리씬) 방지를 위해 악센트 부호가 들어간 RESCÉNE를 사용한다.",
-          "answer": "O",
+          "type": "MULTIPLE",
+          "question": "[유튜브 킬러] 《안녕하세요원이입니다잘부탁드립니다》의 전설적인 갸루 영상 〈갸루의 자세에 대해서 배워보았습니다〉의 업로드 날짜는?",
+          "answer": "1",
           "choices": [
-            "",
-            "",
-            "",
-            ""
+            "2026년 3월 20일",
+            "2026년 2월 14일",
+            "2026년 4월 5일",
+            "2026년 5월 1일"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1284,8 +1284,8 @@
         },
         {
           "type": "SHORT",
-          "question": "경북 경주 출신 제나(ZENA)가 경주시 홍보대사로 위촉되며 가마를 타고 실제로 수여받은 명예 증서의 이름은? (명예 OOOO증)",
-          "answer": "신라공주, 명예 신라공주, 신라공주증, 명예신라공주증",
+          "question": "리센느가 경주시 홍보대사로 위촉되며 가마를 타고 실제로 수여받은 명예 증서의 이름은? (명예 OOOO증)",
+          "answer": "신라공주, 신라공주증, 명예 신라공주증, 명예신라공주증",
           "choices": [
             "",
             "",
@@ -1316,8 +1316,8 @@
         },
         {
           "type": "SHORT",
-          "question": "향기를 통해 과거의 기억이나 감정을 되살리는 심리학 현상으로 리센느의 핵심 모티브가 된 효과는? (OOO 효과)",
-          "answer": "프루스트, 프루스트 효과, 프루스트효과, proust",
+          "question": "향기를 통해 과거의 기억이나 감정을 되살리는 심리학 현상으로 리센느의 핵심 모티브가 된 효과는? (OOOO 효과)",
+          "answer": "프루스트, 프루스트 효과, 프루스트효과, proust, Proust",
           "choices": [
             "",
             "",
@@ -1332,7 +1332,7 @@
         },
         {
           "type": "OX",
-          "question": "나무위키 프로필: 막내 라인인 멤버 메이(MAY)는 리센느 멤버 5명 중 키가 가장 큰 최장신 멤버이다.",
+          "question": "막내 라인인 멤버 메이(MAY)는 리센느 멤버 5명 중 키가 가장 큰 최장신 멤버이다.",
           "answer": "X",
           "choices": [
             "",
@@ -1367,7 +1367,7 @@
       "owners": [
         "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc"
       ],
-      "updatedAt": "2026-10-25T17:54:19.292Z"
+      "updatedAt": "2026-10-25T18:15:56.464Z"
     }
   ],
   "deletedQuizIds": [
