@@ -1091,14 +1091,14 @@
           "caseSensitive": false
         },
         {
-          "type": "MULTIPLE",
-          "question": "[기록 킬러] 리센느가 음원 역주행으로 역사적인 첫 멜론 TOP 100 1위를 달성하기까지 공식 데뷔일로부터 정확히 며칠이 걸렸을까요?",
-          "answer": "1",
+          "type": "SHORT",
+          "question": "리센느 멤버 중 2004년생 맏언니이자 팀의 든든한 리더를 맡고 있는 멤버는?",
+          "answer": "원이, 정원이, WONI, woni",
           "choices": [
-            "835일 (2026년 7월 8일)",
-            "742일 (2026년 4월 6일)",
-            "910일 (2026년 9월 21일)",
-            "800일 (2026년 6월 3일)"
+            "",
+            "",
+            "",
+            ""
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1156,13 +1156,13 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "[음방 기록] 리센느가 데뷔 후 모든 방송을 통틀어 생애 첫 음악 방송 1위(1등)를 수상한 방송 프로그램과 곡명은?",
+          "question": "한국인 멤버 메이(MAY)가 나무위키에 이토 메이라는 별명이 붙은 이유는?",
           "answer": "1",
           "choices": [
-            "SBS M 《더 쇼》 - Pretty Girl",
-            "MBC 《쇼! 음악중심》 - LOVE ATTACK",
-            "SBS 《인기가요》 - LOVE ATTACK",
-            "Mnet 《엠카운트다운》 - UhUh"
+            "한국어 발음이 일본인 미나미보다 어눌할 때가 있어서",
+            "일본 도쿄에서 3년간 유학 생활을 해서",
+            "미나미와 친자매처럼 외모가 닮아서",
+            "일본 애니메이션 마니아라서"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1251,38 +1251,6 @@
           "caseSensitive": false
         },
         {
-          "type": "MULTIPLE",
-          "question": "[지상파 기록] 리센느가 지상파 음악 방송에서 사상 처음으로 1위를 차지했던 프로그램과 곡명은?",
-          "answer": "1",
-          "choices": [
-            "MBC 《쇼! 음악중심》 - Pretty Girl",
-            "SBS 《인기가요》 - LOVE ATTACK",
-            "KBS2 《뮤직뱅크》 - Pretty Girl",
-            "MBC 《쇼! 음악중심》 - LOVE ATTACK"
-          ],
-          "timeLimit": 15,
-          "isRevival": false,
-          "inputMode": "BUTTON",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
-          "type": "MULTIPLE",
-          "question": "[유튜브 킬러] 《안녕하세요원이입니다잘부탁드립니다》의 전설적인 갸루 영상 〈갸루의 자세에 대해서 배워보았습니다〉의 업로드 날짜는?",
-          "answer": "1",
-          "choices": [
-            "2026년 3월 20일",
-            "2026년 2월 14일",
-            "2026년 4월 5일",
-            "2026년 5월 1일"
-          ],
-          "timeLimit": 15,
-          "isRevival": false,
-          "inputMode": "BUTTON",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
           "type": "SHORT",
           "question": "리센느가 경주시 홍보대사로 위촉되며 가마를 타고 실제로 수여받은 명예 증서의 이름은? (명예 OOOO증)",
           "answer": "신라공주, 신라공주증, 명예 신라공주증, 명예신라공주증",
@@ -1291,6 +1259,38 @@
             "",
             "",
             ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "[음방 기록] 리센느가 데뷔 후 모든 방송을 통틀어 생애 첫 음악 방송 1위(1등)를 수상한 방송 프로그램과 곡명은?",
+          "answer": "1",
+          "choices": [
+            "SBS M 《더 쇼》 - Pretty Girl",
+            "MBC 《쇼! 음악중심》 - LOVE ATTACK",
+            "SBS 《인기가요》 - LOVE ATTACK",
+            "Mnet 《엠카운트다운》 - UhUh"
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "[유튜브 킬러 1] 원이의 개인 유튜브 채널 《안녕하세요원이입니다잘부탁드립니다》의 공식 채널 개설 날짜는?",
+          "answer": "1",
+          "choices": [
+            "2026년 2월 4일",
+            "2026년 1월 15일",
+            "2026년 2월 28일",
+            "2026년 3월 5일"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1315,30 +1315,14 @@
           "caseSensitive": false
         },
         {
-          "type": "SHORT",
-          "question": "향기를 통해 과거의 기억이나 감정을 되살리는 심리학 현상으로 리센느의 핵심 모티브가 된 효과는? (OOOO 효과)",
-          "answer": "프루스트, 프루스트 효과, 프루스트효과, proust, Proust",
+          "type": "MULTIPLE",
+          "question": "[유튜브 킬러 2] 《안녕하세요원이입니다잘부탁드립니다》에서 폭발적인 화제를 모았던 〈갸루와 거제에 왔습니다 (거제 1편)〉의 업로드 날짜는?",
+          "answer": "1",
           "choices": [
-            "",
-            "",
-            "",
-            ""
-          ],
-          "timeLimit": 15,
-          "isRevival": false,
-          "inputMode": "BUTTON",
-          "ignoreSpaces": true,
-          "caseSensitive": false
-        },
-        {
-          "type": "OX",
-          "question": "막내 라인인 멤버 메이(MAY)는 리센느 멤버 5명 중 키가 가장 큰 최장신 멤버이다.",
-          "answer": "X",
-          "choices": [
-            "",
-            "",
-            "",
-            ""
+            "2026년 5월 22일",
+            "2026년 4월 17일",
+            "2026년 6월 5일",
+            "2026년 5월 8일"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1348,13 +1332,29 @@
         },
         {
           "type": "MULTIPLE",
-          "question": "[골든벨 최종관문] 소속사 대표님이 열렬한 광팬이라 멤버들도 챙겨본다는 잉글랜드 프리미어리그(EPL) 축구 클럽은?",
+          "question": "[지상파 기록] 리센느가 지상파 음악 방송에서 사상 처음으로 1위를 차지했던 프로그램과 곡명은?",
           "answer": "1",
           "choices": [
-            "아스날 FC (Arsenal)",
-            "맨체스터 시티 (Man City)",
-            "첼시 FC (Chelsea)",
-            "토트넘 홋스퍼 (Tottenham)"
+            "MBC 《쇼! 음악중심》 - Pretty Girl",
+            "SBS 《인기가요》 - LOVE ATTACK",
+            "KBS2 《뮤직뱅크》 - Pretty Girl",
+            "MBC 《쇼! 음악중심》 - LOVE ATTACK"
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "[골든벨 파이널] 리센느가 음원 역주행으로 역사적인 첫 멜론 TOP 100 1위를 달성하기까지 공식 데뷔일(2024.03.26)로부터 걸린 일수는?",
+          "answer": "1",
+          "choices": [
+            "835일 (2026년 7월 8일)",
+            "742일 (2026년 4월 6일)",
+            "910일 (2026년 9월 21일)",
+            "800일 (2026년 6월 3일)"
           ],
           "timeLimit": 15,
           "isRevival": false,
@@ -1367,7 +1367,7 @@
       "owners": [
         "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc"
       ],
-      "updatedAt": "2026-10-25T18:15:56.464Z"
+      "updatedAt": "2026-10-25T18:23:20.652Z"
     }
   ],
   "deletedQuizIds": [
