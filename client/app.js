@@ -483,11 +483,32 @@ function updateCameraForScreen() {
 window.addEventListener('resize', updateCameraForScreen);
 const layoutObserver = new ResizeObserver(updateCameraForScreen);
 [container, document.querySelector('.top-hud-stack'), document.querySelector('.bottom-controls-row')].forEach(el => layoutObserver.observe(el));
-if (window.visualViewport) window.visualViewport.addEventListener('resize', () => {
-  document.documentElement.style.setProperty('--app-height', window.visualViewport.height + 'px');
-  document.body.classList.toggle('keyboard-open', isInputFocused() && window.innerHeight - window.visualViewport.height > 100);
-  updateCameraForScreen();
-});
+// Fixed controls must track the visible viewport, not the covered layout viewport.
+let inputViewportFrame=null,inputViewportUntil=0,inputViewportKey='';
+function scheduleInputViewport(trackKeyboard=false){
+  if(trackKeyboard)inputViewportUntil=performance.now()+900;
+  if(inputViewportFrame===null)inputViewportFrame=requestAnimationFrame(syncInputViewport);
+}
+function syncInputViewport(now){
+  inputViewportFrame=null;
+  const viewport=window.visualViewport;
+  const height=viewport?.height||window.innerHeight;
+  const focused=isSceneInputFocused();
+  const inset=focused&&(!viewport||Math.abs(viewport.scale-1)<.05)?Math.max(0,window.innerHeight-height-(viewport?.offsetTop||0)):0;
+  const keyboardOpen=focused&&inset>100;
+  const key=`${height}:${inset}:${keyboardOpen}`;
+  if(key!==inputViewportKey){
+    inputViewportKey=key;
+    document.documentElement.style.setProperty('--app-height',height+'px');
+    document.documentElement.style.setProperty('--keyboard-inset',inset+'px');
+    document.body.classList.toggle('keyboard-open',keyboardOpen);
+    updateCameraForScreen();
+  }
+  if(focused&&now<inputViewportUntil)inputViewportFrame=requestAnimationFrame(syncInputViewport);
+}
+if(window.visualViewport)for(const type of ['resize','scroll'])window.visualViewport.addEventListener(type,()=>scheduleInputViewport());
+window.addEventListener('resize',()=>scheduleInputViewport());
+scheduleInputViewport();
 updateCameraForScreen();
 
 // 주관식 입력창 엔터키 이벤트 등록
@@ -1691,7 +1712,7 @@ document.getElementById('short-answer-input').addEventListener('input', () => {
 
 
 document.addEventListener('focusin', event => {
-  if(['chat-input','short-answer-input'].includes(event.target.id))freezeSceneForInput();
+  if(['chat-input','short-answer-input'].includes(event.target.id)){freezeSceneForInput();scheduleInputViewport(true);}
   if (event.target.matches('input,textarea,select')) {
     resetJoystick();
     myMoveTarget = null;
@@ -1699,6 +1720,7 @@ document.addEventListener('focusin', event => {
   }
 });
 document.addEventListener('focusout',()=>requestAnimationFrame(()=>{
+  scheduleInputViewport();
   if(!isSceneInputFocused()&&document.getElementById('chat-popup').classList.contains('hidden')){releaseChatScene();updateCameraForScreen();}
 }));
 window.addEventListener('blur', () => {resetJoystick();myMoveTarget=null;Object.keys(keysPressed).forEach(key=>keysPressed[key]=false);});

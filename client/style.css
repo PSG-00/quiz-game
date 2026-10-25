@@ -2292,3 +2292,6 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
     word-break: keep-all !important;
   }
 }
+
+/* Lift only the input controls above an overlay keyboard; keep the world frozen. */
+#game-hud .bottom-controls-row { bottom:calc(max(18px,env(safe-area-inset-bottom)) + var(--keyboard-inset,0px)); }
