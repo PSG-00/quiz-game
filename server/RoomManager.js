@@ -174,12 +174,13 @@ class Room {
 
     this.placePlayerInRoleZone(player);
     this.players.set(id, player);
+    if(this.testBotIds&&!this.testBotIds.has(id)&&(!this.hostId||this.testBotIds.has(this.hostId)||!this.players.has(this.hostId)))this.hostId=id;
     return player;
   }
 
   removePlayer(id) {
     this.players.delete(id);
-    if (this.hostId === id) this.hostId = this.players.keys().next().value || null;
+    if (this.hostId === id) this.hostId = (this.testBotIds?[...this.players.keys()].find(pid=>!this.testBotIds.has(pid)):null)||this.players.keys().next().value||null;
   }
 
   getCurrentQuestion() {
@@ -651,6 +652,6 @@ class RoomManager {
     room.players.clear();this.rooms.delete(room.id);
   }
   cleanupEmptyRooms(){for(const room of this.rooms.values())if(!room.players.size)this.closeRoom(room);}
-  close(){if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values())if(room.timerHandle)clearTimeout(room.timerHandle);}
+  close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values())if(room.timerHandle)clearTimeout(room.timerHandle);}
 }
 module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS};
