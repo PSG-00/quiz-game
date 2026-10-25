@@ -14,6 +14,35 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  await page.waitForFunction(()=>currentRoomId&&roomState?.state==='WAITING');const roomId=await page.evaluate(()=>currentRoomId),hostId=await page.evaluate(()=>myClientId);
  guest=new WebSocket('ws://127.0.0.1:'+port);let guestId;await new Promise((resolve,reject)=>{guest.on('error',reject);guest.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='WELCOME'){guestId=m.clientId;guest.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'다른 참가자',worldDelta:true}));}if(m.type==='JOINED_ROOM')resolve();});});
  await page.waitForFunction(()=>playerEntities.size===2);
+ await control('patch',{roomId,players:{[hostId]:{x:0,z:0},[guestId]:{x:0,z:0}}});await page.evaluate(()=>{myPos={x:0,z:0};myMoveTarget=null;});await sleep(800);
+ guest.send(JSON.stringify({type:'CHAT',text:'이동 중 말풍선 표시 확인'}));
+ await page.waitForFunction(id=>!!playerEntities.get(id)?.chatBubbleText,guestId);
+ result.overlayMotion=await page.evaluate(async id=>{
+   const entity=playerEntities.get(id),samples=[];let reads=0;
+   for(const el of [entity.nameLabel,entity.chatBubble])for(const prop of ['offsetWidth','offsetHeight']){
+     const descriptor=Object.getOwnPropertyDescriptor(HTMLElement.prototype,prop);
+     Object.defineProperty(el,prop,{configurable:true,get(){reads++;return descriptor.get.call(this);}});
+   }
+   const originalRender=renderer.render;
+   const nextRender=()=>new Promise(resolve=>{renderer.render=function(...args){originalRender.apply(this,args);renderer.render=originalRender;resolve();};});
+   try{
+     for(let i=0;i<24;i++){
+       entity.targetX=entity.x+.15;
+       await nextRender();
+       samples.push(entity.nameLabel.style.transform);
+     }
+     const movementReads=reads;
+     entity.chatBubbleText='내용이 바뀌면 크기를 다시 계산합니다';entity.chatText.textContent=entity.chatBubbleText;
+     await nextRender();
+     return {frames:samples.length,distinctPositions:new Set(samples).size,movementReads,contentChangeReads:reads-movementReads};
+   }finally{
+     renderer.render=originalRender;
+     for(const el of [entity.nameLabel,entity.chatBubble])for(const prop of ['offsetWidth','offsetHeight'])delete el[prop];
+   }
+ },guestId);
+ assert.ok(result.overlayMotion.distinctPositions>=22,JSON.stringify(result.overlayMotion));
+ assert.ok(result.overlayMotion.movementReads<=8,JSON.stringify(result.overlayMotion));
+ assert.ok(result.overlayMotion.contentChangeReads>=2&&result.overlayMotion.contentChangeReads<=4,JSON.stringify(result.overlayMotion));
  const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
  assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=1600000);
  result.renderSettings=renderSettings;

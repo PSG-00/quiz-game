@@ -685,9 +685,36 @@ function updatePlayerOverheadIfNeeded(entity) {
   }
 }
 
+// Cache DOM measurements independently of the per-frame screen position.
+function measurePlayerChat(entity,width,height,badgeWidth,anchorX,badgeTop){
+  const key=JSON.stringify([entity.chatBubbleText,entity.name,width,height]);
+  const bubble=entity.chatBubble;
+  if(entity.chatLayoutKey!==key){
+    bubble.classList.remove('side-chat','chat-on-right','chat-on-left');
+    bubble.style.maxWidth='';entity.chatText.style.maxHeight=Math.max(20,height-50)+'px';
+    entity.chatNaturalSize={width:bubble.offsetWidth,height:bubble.offsetHeight};
+    entity.chatLayoutKey=key;entity.chatPlacementKey='top';entity.chatSize=entity.chatNaturalSize;
+  }
+  const clearance=Math.max(entity.labelWidth/2,badgeWidth/2)+12;
+  const rightSpace=width-anchorX-clearance-8,leftSpace=anchorX-clearance-8;
+  const onRight=rightSpace>=leftSpace;
+  const side=badgeTop-entity.chatNaturalSize.height-5<8&&Math.max(rightSpace,leftSpace)>=64;
+  // Bucket the available width so movement does not trigger layout every frame.
+  const maxWidth=Math.max(64,Math.floor(Math.min(250,onRight?rightSpace:leftSpace)/16)*16);
+  const placementKey=side?`${onRight}:${maxWidth}`:'top';
+  if(entity.chatPlacementKey!==placementKey){
+    bubble.classList.toggle('side-chat',side);
+    bubble.classList.toggle('chat-on-right',side&&onRight);
+    bubble.classList.toggle('chat-on-left',side&&!onRight);
+    bubble.style.maxWidth=side?maxWidth+'px':'';
+    entity.chatSize=side?{width:bubble.offsetWidth,height:bubble.offsetHeight}:entity.chatNaturalSize;
+    entity.chatPlacementKey=placementKey;
+  }
+  return {...entity.chatSize,side,onRight,clearance};
+}
+
 // ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
 const clock = new THREE.Clock();
-let frameNumber=0;
 const framePacing=FramePacing.create(144);
 const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
 function disposeEntityAvatar(entity){
@@ -749,7 +776,6 @@ function animate(frameTime) {
   if(!framePacing.accept(frameTime))return;
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
-  frameNumber++;
   avatarViewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);avatarFrustum.setFromProjectionMatrix(avatarViewProjection);
   const joystickEnabled=portraitScreen()&&canMove();
   joystickRoot.classList.toggle('hidden',!joystickEnabled);
@@ -860,13 +886,7 @@ function animate(frameTime) {
     if(!inView){if(entity.lowDetail)MobileCrowd.hide(entity.charSprite);else if(entity.charSprite.userData.instancedAvatar)InstancedAvatars.hide(entity.charSprite);entity.nameLabel.style.visibility='hidden';entity.chatBubble.classList.add('hidden');continue;}
     if(entity.lowDetail){entity.charSprite.rotation.y=0;MobileCrowd.update(entity.charSprite,!entity.alive,entity.motion.heading,now,entity.motion);}
     else if(entity.charSprite.userData.instancedAvatar||entity.id===myClientId||now-entity.lastPose>33){window.AvatarActors.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);entity.lastPose=now;}
-    // Keep bodies and local controls at display rate. Remote DOM nameplates and
-    // chat layout need at most 30 Hz, including on desktop with 100 players.
-    if(entity.id!==myClientId){
-      if(!entity.nextLabelAt)entity.nextLabelAt=now+(entity.seed%4)*8;
-      if(frameNumber%3||now<entity.nextLabelAt)continue;
-      entity.nextLabelAt=now+1000/30;
-    }
+    // Position overlays at display rate; measure text only when its layout changes.
     const displayHeight=(entity.charSprite.userData.displayHeight||entity.charSprite.userData.visualHeight||2.95)*entity.avatarScale;
     nicknamePosition.set(viewPosition.x,entity.y+displayHeight,viewPosition.z).project(camera);
     const nameVisible = Math.abs(nicknamePosition.x)<1.1 && Math.abs(nicknamePosition.y)<1.1 && Math.abs(nicknamePosition.z)<1;
@@ -874,7 +894,10 @@ function animate(frameTime) {
     entity.nameLabel.style.visibility = nameVisible ? 'visible' : 'hidden';
     entity.nameLabel.style.transform = `translate3d(${anchorX}px,${nameY}px,0) translate(-50%,-100%)`;
     entity.nameLabel.classList.toggle('find-me-muted',entity.id!==myClientId && performance.now()<findMeUntil);
-    if(!entity.labelHeight)entity.labelHeight=entity.nameLabel.offsetHeight;
+    const labelKey=`${entity.name}|${viewWidth}|${viewHeight}|${entity.id===myClientId}`;
+    if(entity.labelKey!==labelKey||!entity.labelHeight){
+      entity.labelHeight=entity.nameLabel.offsetHeight;entity.labelWidth=entity.nameLabel.offsetWidth;entity.labelKey=labelKey;
+    }
     const badgeBottom=nameY-entity.labelHeight-3;
     badgePosition.set(nicknamePosition.x,1-badgeBottom/viewHeight*2,nicknamePosition.z).unproject(camera);
     const depth=-badgePosition.clone().applyMatrix4(camera.matrixWorldInverse).z;
@@ -886,27 +909,14 @@ function animate(frameTime) {
     const chatting = nameVisible&&Math.abs(nicknamePosition.x)<1&&!!entity.chatBubbleText&&Date.now()<entity.chatExpireAt;
     entity.chatBubble.classList.toggle('hidden',!chatting);
     if(chatting) {
-      entity.chatBubble.classList.remove('side-chat','chat-on-right','chat-on-left');
-      entity.chatBubble.style.maxWidth='';
-      entity.chatText.style.maxHeight = Math.max(20,badgeTop-28)+'px';
-      let bubbleWidth=entity.chatBubble.offsetWidth,bubbleHeight=entity.chatBubble.offsetHeight;
+      const layout=measurePlayerChat(entity,viewWidth,viewHeight,badgeWidth,anchorX,badgeTop);
+      const {width:bubbleWidth,height:bubbleHeight,side,onRight,clearance}=layout;
       let left=Math.max(8,Math.min(viewWidth-bubbleWidth-8,anchorX-bubbleWidth/2));
       let top=Math.max(8,Math.min(viewHeight-bubbleHeight-10,badgeTop-bubbleHeight-5));
-      // On short landscape screens there may be no room above the badges.
-      // Put chat beside the head instead of overlapping the name or status.
-      if(badgeTop-bubbleHeight-5<8){
-        const clearance=Math.max(entity.nameLabel.offsetWidth/2,badgeWidth/2)+12;
-        const rightSpace=viewWidth-anchorX-clearance-8,leftSpace=anchorX-clearance-8;
-        const onRight=rightSpace>=leftSpace;
-        if(Math.max(rightSpace,leftSpace)>=64){
-          entity.chatBubble.classList.add('side-chat',onRight?'chat-on-right':'chat-on-left');
-          entity.chatBubble.style.maxWidth=Math.max(64,Math.min(250,onRight?rightSpace:leftSpace))+'px';
-          entity.chatText.style.maxHeight=Math.max(20,viewHeight-50)+'px';
-          bubbleWidth=entity.chatBubble.offsetWidth;bubbleHeight=entity.chatBubble.offsetHeight;
-          left=onRight?anchorX+clearance:anchorX-clearance-bubbleWidth;
-          top=Math.max(8,Math.min(viewHeight-bubbleHeight-10,nameY+5-bubbleHeight/2));
-          entity.chatBubble.style.setProperty('--chat-tail-y',Math.max(12,Math.min(bubbleHeight-12,nameY+5-top))+'px');
-        }
+      if(side){
+        left=onRight?anchorX+clearance:anchorX-clearance-bubbleWidth;
+        top=Math.max(8,Math.min(viewHeight-bubbleHeight-10,nameY+5-bubbleHeight/2));
+        entity.chatBubble.style.setProperty('--chat-tail-y',Math.max(12,Math.min(bubbleHeight-12,nameY+5-top))+'px');
       }
       entity.chatBubble.style.transform = `translate3d(${Math.round(left)}px,${Math.round(top)}px,0)`;
       entity.chatBubble.style.setProperty('--chat-tail-x',Math.max(12,Math.min(bubbleWidth-12,anchorX-left))+'px');
