@@ -1034,6 +1034,339 @@
       "ownerHash": "33a2dff5dbda20cd6445dd34445dde512a6436ee1ed766963db434abe993fa08",
       "createdAt": "2026-10-23T03:04:45.155Z",
       "updatedAt": "2026-10-23T03:04:45.155Z"
+    },
+    {
+      "id": "quiz_d61b6c01-bc6d-4bb5-a287-25b3bcd8b3e0",
+      "code": "72MJME",
+      "title": "✨ 리센느(RESCENE) 마스터 골든벨",
+      "targetWinners": 2,
+      "restSeconds": 5,
+      "questions": [
+        {
+          "type": "OX",
+          "question": "걸그룹 리센느(RESCENE)의 공식 데뷔일은 2024년 3월 26일이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느(RESCENE)의 공식 팬덤 이름은 무엇일까요?",
+          "answer": "1",
+          "choices": [
+            "리마인 (REMINE)",
+            "리센트 (RECENT)",
+            "파스텔 (PASTEL)",
+            "시너리 (SCENERY)"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "리센느의 리더이자 맏언니인 멤버는 '원이(WONI)'이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느의 데뷔 싱글 1집 《Re:Scene》의 타이틀곡 제목은?",
+          "answer": "1",
+          "choices": [
+            "UhUh",
+            "YoYo",
+            "LOVE ATTACK",
+            "Pinball"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "멤버 중 유일한 일본 국적이며 과거 '방과후 설렘'에 출연했던 멤버의 활동명은?",
+          "answer": "미나미, 이토 미나미, Minami, minami",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "맏언니 원이(2004년생)와 막내즈(2008년생)의 나이 차이는 4살이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "청량한 멜로디와 역주행 챌린지로 큰 사랑을 받은 미니 1집의 타이틀곡은?",
+          "answer": "1",
+          "choices": [
+            "LOVE ATTACK",
+            "Glow Up",
+            "Heart Drop",
+            "New World"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MINORITY",
+          "question": "[소수결] 숙소 야식 대격돌! 더 적은 인원이 선택한 쪽만 생존합니다!",
+          "answer": "",
+          "choices": [
+            "왼쪽: 후라이드 치킨",
+            "오른쪽: 페퍼로니 피자",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "[패자부활전] 그룹명 RESCENE은 'Scene(장면)'과 'Scent(향)'를 합친 단어이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "멤버 5명 중 MBTI의 첫 글자가 유일하게 'I(내향형)'인 두 멤버는 메이와 누구일까요?",
+          "answer": "제나, 김가영, Zena, zena",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "미니 1집 《SCENEDROME》 앨범의 메인 향기 콘셉트는 무엇일까요?",
+          "answer": "1",
+          "choices": [
+            "앰버그리스 (용연향)",
+            "플로럴 (꽃향)",
+            "비누 향",
+            "자몽 향"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "미니 1집에서 'Pinball'과 'LOVE ATTACK' 중 뮤직비디오가 먼저 공개된 것은 LOVE ATTACK이다.",
+          "answer": "X",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MINORITY",
+          "question": "[소수결] 콘서트 티켓팅 좌석 선택! 더 적은 인원이 모인 쪽만 생존합니다!",
+          "answer": "",
+          "choices": [
+            "왼쪽: 1열 극사이드 좌석",
+            "오른쪽: 1층 중앙 통로 15열 좌석",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "[패자부활전] 데뷔 전 2024년 2월에 선공개되었던 싱글 1집 수록곡의 제목은?",
+          "answer": "1",
+          "choices": [
+            "YoYo",
+            "KoKo",
+            "ZoZo",
+            "NoNo"
+          ],
+          "timeLimit": 12,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "경상북도 경주 출신으로 '신라공주'라는 별명을 가진 멤버 '제나'의 본명은?",
+          "answer": "김가영, 가영",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느 멤버들의 출생지(고향) 연결로 올바르지 않은 것은?",
+          "answer": "1",
+          "choices": [
+            "메이 - 충청북도 청주시",
+            "미나미 - 일본 지바현",
+            "리브 - 경기도 수원시",
+            "제나 - 경상북도 경주시"
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "OX",
+          "question": "데뷔 타이틀곡 〈UhUh〉에서 멤버들이 표현한 시그니처 플로럴 향의 이름은 '버닝 플라워'이다.",
+          "answer": "O",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MINORITY",
+          "question": "[소수결] 파이널 직전 운명의 갈림길! 더 적은 인원이 선택한 쪽만 살아남습니다!",
+          "answer": "",
+          "choices": [
+            "왼쪽: 매일 직캠 100번 보기",
+            "오른쪽: 신곡 혼자 하루 먼저 듣기",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "SHORT",
+          "question": "[패자부활전] 향기를 맡고 과거의 기억을 떠올리는 심리학 현상으로, 리센느 세계관 모티브가 된 효과는?",
+          "answer": "프루스트, 프루스트 효과, proust",
+          "choices": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "timeLimit": 15,
+          "isRevival": true,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        },
+        {
+          "type": "MULTIPLE",
+          "question": "리센느 멤버 중 2008년생 동갑내기이자 공식 '막내즈'에 해당하는 멤버 2명은?",
+          "answer": "1",
+          "choices": [
+            "메이, 제나",
+            "리브, 미나미",
+            "원이, 리브",
+            "미나미, 메이"
+          ],
+          "timeLimit": 12,
+          "isRevival": false,
+          "inputMode": "BUTTON",
+          "ignoreSpaces": true,
+          "caseSensitive": false
+        }
+      ],
+      "ownerHash": "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc",
+      "owners": [
+        "b9f2f870cfe57a29ff87f90485f0647910aa829710ecf6f0fd61a0e895f817dc"
+      ]
     }
   ],
   "deletedQuizIds": [
@@ -1057,6 +1390,7 @@
     "697KEU",
     "LMX8A9",
     "ULHR2K",
-    "Q48CBG"
+    "Q48CBG",
+    "72MJME"
   ]
 }
