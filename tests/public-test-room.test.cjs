@@ -24,6 +24,7 @@ test('주관식도 봇이 답하고 일반 방의 방장 이전 규칙에는 영
 
 test('공개 테스트 방은 사람 연결이 끊기면 봇 이동을 멈추고 복귀 시 사람 방장 복원',()=>{
  const {manager,testRoom}=setup(),room=testRoom.room,human=room.addPlayer('h1','사람');
+ room.startGame();clearTimeout(room.timerHandle);
  room.disconnectPlayer(human.id);const bot=room.players.values().next().value,before={x:bot.x,z:bot.z};testRoom.tick(10000);assert.deepEqual({x:bot.x,z:bot.z},before);
  room.resumePlayer(human,null);assert.equal(room.hostId,'h1');testRoom.tick(10000);assert.notDeepEqual({x:bot.x,z:bot.z},before);manager.close();
 });

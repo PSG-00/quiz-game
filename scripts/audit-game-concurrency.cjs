@@ -18,6 +18,11 @@ async function main(){
  child.on('message',m=>{const q=requests.get(m.id);if(!q)return;requests.delete(m.id);clearTimeout(q.timer);m.error?q.reject(Error(m.error)):q.resolve(m.result);});
  try{
   await until(async()=>{try{return (await fetch(base+'/api/rooms')).ok;}catch{return false;}});
+  const waitingHost=await connect(token()),waitingRoom=await create(waitingHost,'시작 전 즉시 퇴장'),waitingGuest=await connect();await join(waitingGuest,waitingRoom);
+  await close(waitingHost,true);const waiting=await until(async()=>{const r=await control('snapshot',{roomId:waitingRoom});return r?.players.length===1?r:null;});
+  assert.equal(waiting.hostId,waitingGuest.id);assert.equal(waiting.players[0].connected,true);
+  await close(waitingGuest,true);await until(async()=>!(await control('rooms')).some(r=>r.id===waitingRoom));
+  note('WAITING-01','PASS','게임 시작 전 연결 종료는 즉시 퇴장·자리 해제·방장 승계, 마지막 사람 종료 시 방 삭제',{});
   // Same identity reconnects: record current behavior, not a claim of correctness.
   const identity=token(),a=await connect(identity),roomId=await create(a),other=await connect();await join(other,roomId);
   const initial=await control('question',{roomId,question:{type:'SHORT',answer:'서울'}});send(a,{type:'SUBMIT_SHORT',answer:'서울',...context(initial)});
@@ -100,7 +105,7 @@ async function main(){
   const over=new WebSocket('ws://127.0.0.1:'+port),closeCode=await new Promise((resolve,reject)=>{over.on('close',resolve);over.on('error',reject);});
   assert.equal(closeCode,1013);await Promise.all(sockets.map(b=>close(b)));note('SERVER-CAP-01','PASS','서버 전체 연결 상한 초과 시 새 연결 거절',{configuredLimit:60,closeCode});
   if(process.env.AUDIT_REAL_GRACE==='1'){
-   const single=await connect(token()),singleRoom=await create(single,'실제 30초 만료'),started=Date.now();await close(single,true);
+   const single=await connect(token()),singleRoom=await create(single,'실제 30초 만료');await control('start',{roomId:singleRoom});const started=Date.now();await close(single,true);
    await until(async()=>(await control('snapshot',{roomId:singleRoom}))?.players[0].connected===false);
    assert.ok((await control('rooms')).some(r=>r.id===singleRoom));
    await sleep(29900);await until(async()=>!(await control('rooms')).some(r=>r.id===singleRoom),5000);

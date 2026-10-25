@@ -189,6 +189,8 @@ class Room {
 
   disconnectPlayer(id,onExpire,now=Date.now()){
     const p=this.players.get(id);if(!p||p.connected===false)return;
+    // Before the host starts a game there is no participation to reserve.
+    if(this.state==='WAITING'){this.removePlayer(id);onExpire?.();return;}
     p.connected=false;p.ws=null;p.disconnectedUntil=now+30000;
     if(this.hostId===id)this.assignHost();
     p.onDisconnectExpire=onExpire;

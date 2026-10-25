@@ -45,8 +45,20 @@ test('50명에 예약 자리 포함, 예약 복귀는 자리 추가 없이 처�
 
 test('마지막 연결 단절은 방 유지, 유예 만료 후에만 빈 방과 타이머 정리',()=>{
  const manager=new RoomManager({startLoop:false}),r=manager.createRoom({},'a');r.addPlayer('a','A');
+ r.startGame();clearTimeout(r.timerHandle);
  r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms(),1000);manager.cleanupEmptyRooms();assert.equal(manager.getRoom(r.id),r);
  assert.equal(r.hostId,null);assert.equal(r.expirePlayer('a',31000),true);assert.equal(manager.getRoom(r.id),undefined);manager.close();
+});
+
+test('시작 전 단절은 즉시 퇴장·자리 해제·방장 승계, 복귀 예약 없음',t=>{
+ const r=room(t);const a=r.players.get('a');r.disconnectPlayer('a');
+ assert.equal(r.players.has('a'),false);assert.equal(r.hostId,'b');assert.equal(r.players.size,1);
+ assert.equal(a.disconnectTimer,undefined);assert.equal(r.resumePlayer(a,null),false);
+});
+
+test('시작 전 마지막 사용자 단절은 방을 즉시 정리',()=>{
+ const manager=new RoomManager({startLoop:false}),r=manager.createRoom({},'a');r.addPlayer('a','A');
+ r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms());assert.equal(manager.getRoom(r.id),undefined);manager.close();
 });
 
 test('명시적 퇴장은 예약 없이 즉시 자격 제거, 새 게임에서는 접속한 관전자도 참가',t=>{
