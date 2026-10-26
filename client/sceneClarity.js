@@ -56,7 +56,9 @@
      initialize();renderer.getDrawingBufferSize(size);
      const nextWidth=Math.max(1,Math.floor(size.x*scale(selected))),nextHeight=Math.max(1,Math.floor(size.y*scale(selected)));
      if(!target){
-      target=new T.WebGLRenderTarget(nextWidth,nextHeight,{minFilter:T.LinearFilter,magFilter:T.LinearFilter,depthBuffer:true,stencilBuffer:false});
+      // r128's depth-only renderbuffer is 16-bit. Use packed 24-bit depth/8-bit
+      // stencil to preserve thin overlapping hair/face geometry's depth precision.
+      target=new T.WebGLRenderTarget(nextWidth,nextHeight,{minFilter:T.LinearFilter,magFilter:T.LinearFilter,depthBuffer:true,stencilBuffer:true});
       // Preserve the game's display-space blending/background exactly. CAS reads
       // raw encoded RGBA8 rather than hardware-decoded sRGB samples.
       target.texture.encoding=T.sRGBEncoding;target.texture.internalFormat='RGBA8';target.texture.generateMipmaps=false;

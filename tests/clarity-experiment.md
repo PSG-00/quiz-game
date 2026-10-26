@@ -3,6 +3,10 @@
 Stable baseline: `codex/save-smooth-50p-20261026` at `48ac5b5`.
 Experiment: `codex/sharpness-experiment-20261026`.
 
+## Depth precision correction
+
+A physical-phone report described hair appearing see-through with the experiment enabled. The audit confirmed an unintended depth precision downgrade: default canvas 24 bits, r128 depth-only render target 16 bits. Closely overlapping hair/face surfaces can suffer incorrect depth ordering at that precision. The target now uses packed depth/stencil (24/8) and an audit requires target depth precision to match or exceed canvas precision. PC and mobile-viewport audits read 24 bits in both paths; color identity, switching, disposal and fallback still pass. This increases the offscreen depth attachment from typically 2 to 4 bytes per input pixel. Physical-phone confirmation of the reported visual artifact is still required. Sharpen mode adds no source detail or output resolution, so its visual improvement on PC may be subtle.
+
 Open `/?clarity=compare` and use the bottom-left 화질 button in one tab:
 
 | Mode | Behavior |

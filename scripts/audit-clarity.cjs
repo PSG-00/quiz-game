@@ -20,6 +20,15 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  await page.waitForFunction(()=>currentRoomId&&playerEntities.size===1&&hostBackdrop.userData.imageLoaded);await sleep(3000);
  await page.evaluate(()=>{window.pauseForClarityAudit=true;});
  const report={device:mobile?'Chromium mobile viewport, not a physical phone':'desktop Chromium',modes:[]};
+ report.depth=await page.evaluate(()=>{
+  const gl=renderer.getContext(),original=renderer.setRenderTarget.bind(renderer);let sceneBits=0;
+  original(null);const canvasBits=gl.getParameter(gl.DEPTH_BITS);
+  renderer.setRenderTarget=t=>{original(t);if(t)sceneBits=gl.getParameter(gl.DEPTH_BITS);};
+  try{sceneClarity.render(scene,camera);}finally{renderer.setRenderTarget=original;}
+  return {canvasBits,sceneBits};
+ });
+ console.log('Depth precision:',report.depth);
+ assert.ok(report.depth.sceneBits>=report.depth.canvasBits,JSON.stringify(report.depth));
  for(const mode of ['off','sharpen','upscale']){
   const result=await page.evaluate(mode=>{
    sceneClarity.setMode(mode);sceneClarity.render(scene,camera);updateClarityButton();
