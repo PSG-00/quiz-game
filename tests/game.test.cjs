@@ -41,7 +41,7 @@ test('생존자가 목표와 같거나 적으면 다음 문제 없이 생존자 
  try{
   for(const survivors of [1,2]){
    const r=setup({},2);for(const [i,p] of [...r.players.values()].entries())p.x=i<survivors?-2:2;
-   r.nextQuestion=()=>{throw Error('목표 이하에서 다음 문제를 진행하면 안 됨');};r.judgeQuestion();scheduled();assert.equal(r.state,'ENDED');assert.equal(r.winners.length,survivors);
+   r.nextQuestion=()=>{throw Error('목표 이하에서 다음 문제를 진행하면 안 됨');};r.judgeQuestion();scheduled();if(survivors===1){assert.equal(r.state,'LOTTERY');scheduled();}assert.equal(r.state,'ENDED');assert.equal(r.winners.length,2);assert.ok(r.winners.some(p=>p.id==='p0'));
   }
  }finally{global.setTimeout=original;}
 });
@@ -136,8 +136,8 @@ test('최대 100자 문제와 줄바꿈을 그대로 보존',()=>{
  const r=setup({question});assert.equal(question.length,100);assert.equal(r.getCurrentQuestion().question,question);
 });
 
-test('방장이 오답이면 일반 참가자가 단독 당첨되고 방장은 제외',()=>{
- const r=setup({type:'SHORT',answer:'서울'},2);r.submitAnswer('p0','부산');r.submitAnswer('p1','서울');r.submitAnswer('p2','인천');judge(r);r.finishOrLottery('확인');assert.deepEqual(r.winners.map(p=>p.id),['p1']);assert.equal(r.players.get(r.hostId).alive,false);
+test('방장이 오답이면 일반 참가자만 우승 확정, 방장은 다른 탈락자와 같은 준우승 추첨 대상',()=>{
+ const r=setup({type:'SHORT',answer:'서울'},2);r.submitAnswer('p0','부산');r.submitAnswer('p1','서울');r.submitAnswer('p2','인천');judge(r);r.finishOrLottery('확인');clearTimeout(r.timerHandle);assert.equal(r.winners[0].id,'p1');assert.equal(r.winners[0].placement,'WINNER');assert.equal(r.winners[1].placement,'RUNNER_UP');assert.ok(['p0','p2'].includes(r.winners[1].id));assert.equal(r.players.get(r.hostId).alive,false);
 });
 test('추첨은 방장 지정과 무관하고 세 참가자의 모든 순열에서 동일 기회',()=>{
  const original=Math.random;const counts={p0:0,p1:0,p2:0};

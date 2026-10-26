@@ -18,6 +18,7 @@ let myClientId = null;
 let currentRoomId = null;
 let roomState = null;
 let raceOwn=null,raceActive=false,raceScene=null;
+let runnerUpRouletteTimer=null,runnerUpRouletteKey='';
 let renderedPhaseKey = null;
 const NICKNAME_STORAGE_KEY = 'ox-nickname-v1';
 let serverTimeOffset = 0;
@@ -1050,15 +1051,23 @@ let resumeSession=null;
 let restoredSubmission=null;
 let reconnectTimer=null,connectionPaused=false,lastPacketAt=Date.now(),lastPingAt=0,connectionStartedAt=0,reconnectAttempts=0,lastRecoveryAt=0,pendingJoinRoomId=null;
 let connectionNoticeTimer=null;
+let recoveryTimer=null,recoveryRequestId=null,recoveryTargetRoomId=null,recoveryJoinFallback=false;
+const retiringSockets=new Set();
+function closeRetiringSockets(){for(const old of retiringSockets){try{old.close();}catch{}retiringSockets.delete(old);}}
+function hardRecoverConnection(){
+ clearTimeout(recoveryTimer);recoveryTimer=null;pendingJoinRoomId=recoveryTargetRoomId||currentRoomId||resumeSession?.roomId||null;connectWebSocket(true);
+}
 function connectionNotice(text,duration=0){
  const el=document.getElementById('connection-notice');el.textContent=text;el.hidden=!text;
  clearTimeout(connectionNoticeTimer);if(duration)connectionNoticeTimer=setTimeout(()=>{el.hidden=true;},duration);
 }
 window.recoverConnection=function(){
- if(Date.now()-lastRecoveryAt<1500)return;lastRecoveryAt=Date.now();connectionPaused=false;
- if(currentRoomId&&!resumeSession)pendingJoinRoomId=currentRoomId;
+ if(recoveryTimer||Date.now()-lastRecoveryAt<1500)return;lastRecoveryAt=Date.now();connectionPaused=false;
+ recoveryTargetRoomId=currentRoomId||resumeSession?.roomId||pendingJoinRoomId;recoveryJoinFallback=false;
  renderedPhaseKey=null;roomStateSync.invalidate();worldUpdates.reset();handleWorldTick([]);myMoveTarget=null;resetJoystick();
- connectionNotice('연결을 새로 열고 최신 게임 상태를 복구하고 있어요…');connectWebSocket(true);
+ connectionNotice('최신 게임 상태를 다시 받고 있어요…');
+ if(currentRoomId&&ws?.readyState===WebSocket.OPEN){recoveryRequestId='recover_'+Date.now();ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId,requestId:recoveryRequestId}));recoveryTimer=setTimeout(hardRecoverConnection,2500);}
+ else hardRecoverConnection();
 };
 try{resumeSession=JSON.parse(sessionStorage.getItem('ox-room-session')||'null');}catch{}
 function saveResumeSession(value){resumeSession=value;try{if(value)sessionStorage.setItem('ox-room-session',JSON.stringify(value));else sessionStorage.removeItem('ox-room-session');}catch{}}
@@ -1071,7 +1080,10 @@ function connectWebSocket(force=false) {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${location.host}`;
   const socket=ws=new WebSocket(wsUrl);libraryReady=false;connectionStartedAt=lastPacketAt=Date.now();lastPingAt=0;
-  if(previous&&previous!==socket){quizAccessUntil=0;cancelQuizPassword();resetCodeLoad();pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();previous.onmessage=previous.onclose=previous.onerror=null;try{previous.close();}catch{}}
+  if(previous&&previous!==socket){quizAccessUntil=0;cancelQuizPassword();resetCodeLoad();pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();previous.onmessage=previous.onclose=previous.onerror=null;
+    if(recoveryTargetRoomId&&previous.readyState===WebSocket.OPEN){retiringSockets.add(previous);setTimeout(()=>{if(retiringSockets.delete(previous))try{previous.close();}catch{}},10000);}
+    else try{previous.close();}catch{}
+  }
 
   ws.onmessage = (event) => {
     if(ws!==socket)return;lastPacketAt=Date.now();
@@ -1109,6 +1121,7 @@ function connectWebSocket(force=false) {
       }
 
       case 'JOINED_ROOM': {
+        closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;recoveryJoinFallback=false;
         reconnectAttempts=0;connectionPaused=false;
         myClientId=msg.clientId;
         restoredSubmission=msg.resumed&&msg.hasSubmitted?msg:null;
@@ -1124,7 +1137,9 @@ function connectWebSocket(force=false) {
         break;
       }
       case 'RESUME_REJECTED':
-        saveResumeSession(null);returnToLobby();connectionNotice('복귀 기한이 지났거나 방이 종료됐어요. 진행 중인 방에는 관전으로 다시 입장할 수 있어요.',10000);setQuizStatus('복귀할 수 없어요. 진행 중인 방에는 관전으로 입장할 수 있어요.');break;
+        saveResumeSession(null);
+        if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:msg.roomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),worldDelta:true}));connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
+        closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryTargetRoomId=null;returnToLobby();connectionNotice('방이 종료되어 복귀할 수 없어요.',10000);setQuizStatus('방이 종료되어 복귀할 수 없어요.');break;
       case 'NOTICE':setQuizStatus(msg.message);break;
       case 'MOVE_CORRECTION':{
         if(msg.roomId!==currentRoomId)break;
@@ -1136,6 +1151,8 @@ function connectWebSocket(force=false) {
       case 'RACE_STATE':receiveRaceState(msg);break;
       case 'ROOM_STATE': {
         if(msg.roomId!==currentRoomId)break;
+        if(msg.recoveryRequestId&&msg.recoveryRequestId===recoveryRequestId){clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;}
+        if(msg.ownSubmission?.hasSubmitted)restoredSubmission={...msg.ownSubmission,ownAnswer:msg.ownSubmission.answer};
         roomState = msg;
         serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
         try{
@@ -1189,6 +1206,7 @@ function connectWebSocket(force=false) {
       }
 
       case 'ERROR': {
+        if(recoveryJoinFallback){closeRetiringSockets();recoveryJoinFallback=false;recoveryTargetRoomId=null;returnToLobby();connectionNotice(msg.message||'재입장할 수 없어요.',10000);break;}
         if(quizAccessRequest===msg.requestId){quizAccessRequest=null;document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-error').textContent=msg.message;break;}
         if(msg.code==='QUIZ_LOAD_LOCKED'){quizAccessUntil=0;resetCodeLoad(msg.message);setQuizStatus(msg.message);break;}
         if(pendingCodeLoad?.requestId===msg.requestId){resetCodeLoad(msg.message||'코드를 확인해 주세요.');break;}
@@ -1206,6 +1224,7 @@ function connectWebSocket(force=false) {
 
   ws.onclose = (event) => {
     if(ws!==socket)return;
+    clearTimeout(recoveryTimer);recoveryTimer=null;
     quizAccessUntil=0;cancelQuizPassword();
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
     if(event.code===4001){saveResumeSession(null);connectionPaused=true;connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');}
@@ -1355,7 +1374,7 @@ function handleRoomStateUpdate(stateMsg) {
   // 사회자 말풍선 업데이트
   if (hostBubble) {
     const announcements={WAITING:'참가자 여러분, 준비되면 시작해 주세요!',COUNTDOWN:'곧 첫 번째 문제가 시작됩니다!',PREPARING:'자리를 확인해 주세요. 곧 시작해요!',JUDGE:'정답을 공개했어요! 위 퀴즈창을 확인해 주세요.',BREAK:'잠깐 쉬면서 자유롭게 채팅해 주세요!',LOTTERY:'생존자 중 당첨자를 추첨하고 있어요!',ENDED:'당첨자가 결정됐어요. 모두 수고하셨습니다!'};
-    hostBubble.textContent=q?.type==='MINORITY'&&stateMsg.state==='JUDGE'?'승리 구역이 정해졌어요! 위 결과를 확인해 주세요.':announcements[stateMsg.state]||stateMsg.hostSpeech||'원하는 쪽으로 이동해 주세요!';
+    hostBubble.textContent=stateMsg.runnerUpLottery&&stateMsg.state==='LOTTERY'?'우승자는 확정됐어요! 준우승자를 추첨하고 있어요.':q?.type==='MINORITY'&&stateMsg.state==='JUDGE'?'승리 구역이 정해졌어요! 위 결과를 확인해 주세요.':announcements[stateMsg.state]||stateMsg.hostSpeech||'원하는 쪽으로 이동해 주세요!';
   }
 
   // 무대 바닥 높이 초기화
@@ -1469,7 +1488,7 @@ function handleRoomStateUpdate(stateMsg) {
     }
   } else if (stateMsg.state === 'LOTTERY') {
     stepInfo.textContent = 'FINAL DRAW';
-    typeSub.textContent = '목표 초과 추첨';
+    typeSub.textContent = stateMsg.runnerUpLottery?'준우승 추첨':'목표 초과 추첨';
     mainText.textContent = stateMsg.lastNotice;
   } else if (stateMsg.state === 'ENDED') {
     stepInfo.textContent = 'FINISHED';
@@ -1495,7 +1514,7 @@ function handleRoomStateUpdate(stateMsg) {
   document.querySelectorAll('#short-answer-panel input, #short-answer-panel button, .multi-pick-btn').forEach(el => el.disabled = !answering || !eligible);
   if (phaseChanged) myMoveTarget = null;
   updateQuestionReadability();
-  syncRaceScene();renderRaceInfo();
+  syncRaceScene();renderRaceInfo();renderRunnerUpRoulette(stateMsg);
   requestAnimationFrame(updateCameraForScreen);
   renderedPhaseKey=phaseKey;
   for (const ent of playerEntities.values()) {
@@ -1655,6 +1674,7 @@ window.resetGame = function () {
 };
 
 function returnToLobby({preserveResume=false}={}){
+ renderRunnerUpRoulette(null);
  if(!preserveResume)saveResumeSession(null);
  resetJoystick();
  closeChatPopup();
@@ -1688,13 +1708,16 @@ function showWinnerModal(stateMsg) {
       const badge = document.createElement('div');
       badge.className = 'winner-badge';
       badge.dataset.winnerId=w.id;
-      badge.textContent = `🏆 ${w.name}`;
+      badge.textContent = `${w.placement==='RUNNER_UP'?'🥈 준우승':w.placement==='WINNER'?'🏆 우승':'🏆'} ${w.name}`;
       listEl.appendChild(badge);
     }
   }
 
   const allSurvivors = stateMsg.allFinalSurvivors || [];
-  if (allSurvivors.length > winners.length) {
+  if(stateMsg.runnerUpLottery){
+    const champions=winners.filter(w=>w.placement==='WINNER').length,runners=winners.filter(w=>w.placement==='RUNNER_UP').length;
+    extraEl.textContent=`생존자 ${champions}명 우승 확정 · 직전 라운드 생존자 중 ${runners}명 준우승 추첨`;
+  }else if (allSurvivors.length > winners.length) {
     extraEl.textContent = `추첨 대상 ${allSurvivors.length}명 중 당첨 목표 ${stateMsg.targetWinners}명이 추첨되었습니다.`;
   } else if (winners.length > 0) {
     extraEl.textContent = `남은 생존자 ${winners.length}명 전원이 당첨되었습니다!`;
@@ -1703,6 +1726,15 @@ function showWinnerModal(stateMsg) {
   }
 
   modal.classList.remove('hidden');
+}
+
+function renderRunnerUpRoulette(state){
+ const panel=document.getElementById('runner-up-roulette'),draw=state?.runnerUpLottery;
+ if(state?.state!=='LOTTERY'||!draw?.candidates.length){clearInterval(runnerUpRouletteTimer);runnerUpRouletteTimer=null;runnerUpRouletteKey='';panel.hidden=true;return;}
+ panel.hidden=false;const key=`${state.gameId}:${state.stateEndTime}`;if(key===runnerUpRouletteKey)return;runnerUpRouletteKey=key;clearInterval(runnerUpRouletteTimer);
+ document.getElementById('runner-up-champions').textContent='🏆 우승 확정 · '+draw.champions.map(p=>p.name).join(', ');
+ document.getElementById('runner-up-draw-info').textContent=`직전 생존자 ${draw.candidates.length}명 중 준우승 ${draw.seats}명 추첨`;
+ let i=0;const cycle=()=>{document.getElementById('runner-up-candidate').textContent=draw.candidates[i++%draw.candidates.length].name;};cycle();runnerUpRouletteTimer=setInterval(cycle,110);
 }
 
 window.closeWinnerModal = function () {

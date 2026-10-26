@@ -9,6 +9,7 @@ process.on('message',message=>{try{
  const room=manager?.getRoom(message.roomId);let result;
  if(message.command==='rooms')result=manager?[...manager.rooms.values()].map(view):[];
  else if(message.command==='snapshot')result=view(room);
+ else if(message.command==='finish'){room.finishOrLottery('최종 추첨 검증');result=view(room);}
  else if(message.command==='lose-expiry-timer'){
   const p=room.players.get(message.playerId);if(p.disconnectTimer)clearTimeout(p.disconnectTimer);p.disconnectedUntil=Date.now()-1;result=view(room);
  }

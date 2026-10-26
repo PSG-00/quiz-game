@@ -203,7 +203,7 @@ wss.on('connection',ws=>{
      if(limits.allow('ping',1,2))send(ws,{type:'APP_PONG',serverNow:Date.now(),roomId:currentRoom?.id||null,stateVersion:currentRoom?.getStateVersion()});break;
     case 'GET_ROOM_STATE':
      if(!limits.allow('stateSync',1,2))break;
-     if(currentRoom&&msg.roomId===currentRoom.id)currentRoom.sendCurrentState(ws);
+     if(currentRoom&&msg.roomId===currentRoom.id)currentRoom.sendCurrentState(ws,{recoveryRequestId:msg.requestId});
      else send(ws,{type:'ROOM_SESSION_MISSING',roomId:msg.roomId});
      break;
     case 'RESUME_ROOM':{

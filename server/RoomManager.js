@@ -105,6 +105,7 @@ class Room {
     this.roundParticipants = new Set();
     this.minorityOutcome=null;
     this.race=null;
+    this.lastEliminatedForFinal=[];this.runnerUpLottery=null;
 
     // WAITING | COUNTDOWN | PREPARING | QUESTION | JUDGE | BREAK | LOTTERY | ENDED
     this.state = 'WAITING';
@@ -249,6 +250,7 @@ class Room {
   startGame() {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
+    this.lastEliminatedForFinal=[];this.runnerUpLottery=null;
     this.gameId = crypto.randomUUID();
     this.roundId=null;
     this.state = 'COUNTDOWN';
@@ -448,6 +450,7 @@ class Room {
 
     // ==================== 일반 라운드 결과 확정 ====================
     const aliveBefore = this.getAlivePlayers().filter(p => this.roundParticipants.has(p.id));
+    this.lastEliminatedForFinal=[];
     const passedPlayers = [];
 
     for (const p of aliveBefore) {
@@ -482,6 +485,7 @@ class Room {
         p.alive = false;
         p.lastResult = 'FAIL';
         eliminatedCount++;
+        this.lastEliminatedForFinal.push(p.id);
         this.placePlayerInRoleZone(p);
       }
     }
@@ -520,6 +524,22 @@ class Room {
       name: p.name,
       spriteSeed: p.spriteSeed
     }));
+
+    // Surviving finalists are guaranteed. Only this last round's eliminated
+    // participants may fill missing prize places; older ghosts/spectators cannot.
+    const finalists=new Set(survivors.map(p=>p.id));
+    const runners=this.lastEliminatedForFinal.map(id=>this.players.get(id)).filter(p=>p&&p.eligible!==false&&!finalists.has(p.id));
+    if(survivors.length>0&&survivors.length<this.targetWinners&&runners.length){
+      const seats=Math.min(this.targetWinners-survivors.length,runners.length),pool=[...runners];
+      for(let i=pool.length-1;i>0;i--){const j=crypto.randomInt(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+      const entry=p=>({id:p.id,name:p.name,spriteSeed:p.spriteSeed});
+      this.runnerUpLottery={champions:survivors.map(entry),candidates:runners.map(entry),seats};
+      this.winners=[...survivors.map(p=>({...entry(p),placement:'WINNER'})),...pool.slice(0,seats).map(p=>({...entry(p),placement:'RUNNER_UP'}))];
+      this.state='LOTTERY';this.stateEndTime=Date.now()+4200;
+      this.hostSpeech=`생존자 ${survivors.length}명 우승 확정! 직전 라운드 생존자 중 준우승 ${seats}명을 추첨합니다!`;
+      this.lastNotice=`우승 ${survivors.length}명 확정 · 남은 ${seats}자리는 직전 생존자 ${runners.length}명 중 준우승 추첨`;
+      this.broadcastRoomEvent();this.timerHandle=setTimeout(()=>{this.state='ENDED';this.hostSpeech=`우승 ${survivors.length}명 · 준우승 ${seats}명 확정! 축하합니다!`;this.lastNotice=this.hostSpeech;this.broadcastRoomEvent();},4200);return;
+    }
 
     // 최종 라운드 종료 후 생존 인원이 목표보다 많으면(survivors.length > targetWinners) 목표 인원만큼 추첨!
     if (survivors.length > this.targetWinners) {
@@ -561,6 +581,7 @@ class Room {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
     this.race=null;
+    this.lastEliminatedForFinal=[];this.runnerUpLottery=null;
     this.state = 'WAITING';
     this.gameId = null;
     this.roundId=null;
@@ -678,6 +699,7 @@ class Room {
       totalQuestions: this.questions.length,
       winners: this.winners,
       allFinalSurvivors: this.allFinalSurvivors,
+      runnerUpLottery:this.runnerUpLottery,
       minorityOutcome:q?.type==='MINORITY'&&['JUDGE','LOTTERY','ENDED'].includes(this.state)?this.minorityOutcome:undefined,
       ...extra
     });
@@ -719,9 +741,10 @@ class Room {
     return playersCompact;
   }
 
-  sendCurrentState(ws){
+  sendCurrentState(ws,extra={}){
     if(ws?.readyState!==1)return;
-    this.broadcastRoomEvent({},ws);
+    const me=[...this.players.values()].find(p=>p.ws===ws);
+    this.broadcastRoomEvent({...extra,...(me?{ownSubmission:{answer:me.submittedText,hasSubmitted:me.hasSubmitted,gameId:this.gameId,roundId:this.roundId}}:{})},ws);
     this.worldStream.snapshot(this.id,this.getWorldPlayers(),ws,this.getStateVersion());
   }
 
