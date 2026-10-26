@@ -27,7 +27,32 @@ test('중도 입장자는 관전만 하고 참가 정원과 부활 자격을 얻
 test('패자부활전은 시작 시 유령 참가자만 절반 선착순 부활',()=>{
  const room=setup(5,[questions[0]],true);room.players.get('p0').alive=false;room.players.get('p1').alive=false;begin(room);assert.equal(room.race.quota,1);assert.equal(room.race.runners.size,2);solve(room,'p0');assert.equal(room.players.get('p0').alive,true);assert.equal(room.players.get('p1').alive,false);assert.equal(room.getAlivePlayers().length,4);clearTimeout(room.timerHandle);
 });
-test('완주자 0명인 마감은 임의 통과 대신 탈락 없이 재도전',()=>{const room=setup();begin(room);room.judgeQuestion();assert.equal(room.state,'JUDGE');assert.equal(room.getAlivePlayers().length,4);clearTimeout(room.timerHandle);});
+test('완주자 0명이어도 푼 개수가 같으면 먼저 정답에 도달한 순서로 절반 통과',()=>{const room=setup();begin(room);solve(room,'p2',Date.now()+1000);solve(room,'p1',Date.now()+2000);room.judgeQuestion();assert.equal(room.state,'JUDGE');assert.deepEqual(room.race.qualified,['p2','p1']);assert.equal(room.getAlivePlayers().length,2);clearTimeout(room.timerHandle);});
+
+test('완주자 자리를 확보한 뒤 문제 수 내림차순과 마지막 정답 시각 오름차순으로 보충',()=>{
+ const room=setup(6,Array(4).fill(questions[0]));begin(room);let now=Date.now()+1000;
+ for(let i=0;i<4;i++)solve(room,'p0',now+=1000);
+ solve(room,'p1',now+=1000);solve(room,'p2',now+=1000);
+ solve(room,'p3',now+=1000);solve(room,'p3',now+=1000);
+ assert.equal(room.state,'QUESTION');room.judgeQuestion();assert.deepEqual(room.race.qualified,['p0','p3','p1']);assert.equal(room.getAlivePlayers().length,3);clearTimeout(room.timerHandle);
+});
+
+test('오답과 재접속은 마지막 정답 시각을 갱신하지 않음',()=>{
+ const room=setup();begin(room);const time=Date.now()+1000;solve(room,'p0',time);const r=room.race.runners.get('p0'),updated=r.progressUpdatedAt,answer=room.race.items[r.order[r.progress]].answer;
+ gate(room,'p0',answer==='O'?'X':'O',time+1000);room.disconnectPlayer('p0');room.resumePlayer(room.players.get('p0'),null);assert.equal(r.progressUpdatedAt,updated);assert.equal(r.progress,1);
+});
+
+test('모두 0문제여도 정원만 한 번 추첨하고 자격 상실자와 중도 입장은 제외',()=>{
+ const room=setup(6);begin(room);room.players.get('p0').eligible=false;room.addPlayer('late','관전');room.judgeQuestion();const selected=room.race.qualified.slice();assert.equal(selected.length,3);assert.ok(!selected.includes('p0')&&!selected.includes('late'));assert.deepEqual(room.race.finalize(),selected);assert.equal(room.getAlivePlayers().length,3);clearTimeout(room.timerHandle);
+});
+
+test('진행도로 선정한 유령도 패자부활전에서 부활',()=>{
+ const room=setup(4,questions,true);room.players.get('p0').alive=false;room.players.get('p1').alive=false;begin(room);solve(room,'p1');room.judgeQuestion();assert.equal(room.players.get('p1').lastResult,'REVIVED');assert.equal(room.players.get('p0').alive,false);clearTimeout(room.timerHandle);
+});
+
+test('제한시간을 생략하면 문제 수 × 15초로 계산하고 명시적 설정은 유지',()=>{
+ const q={type:'RACE',question:'레이스',raceQuestions:Array(5).fill(questions[0])};const room=new Room({questions:[q]},'p0');assert.equal(room.questions[0].timeLimit,75);assert.equal(Files.parse(JSON.stringify({version:1,questions:[q]})).questions[0].timeLimit,75);assert.equal(setup().questions[0].timeLimit,120);
+});
 test('짧은 연결 끊김과 복귀에도 개인 진행도와 순서를 유지',()=>{
  const room=setup();begin(room);solve(room,'p0');const r=room.race.runners.get('p0'),order=r.order.slice();room.disconnectPlayer('p0');assert.equal(room.players.get('p0').alive,true);room.resumePlayer(room.players.get('p0'),null);assert.equal(r.progress,1);assert.deepEqual(r.order,order);
 });

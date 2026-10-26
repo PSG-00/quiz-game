@@ -93,7 +93,7 @@ class Room {
           answer: ['MINORITY','RACE'].includes(q.type)?'':String(q.answer || 'O').trim(),
           ...(q.type==='RACE'?{raceQuestions:Array.isArray(q.raceQuestions)?q.raceQuestions.map(item=>({question:String(item?.question||''),answer:String(item?.answer||'').toUpperCase()})):[]} :{}),
           choices: Array.isArray(q.choices) ? q.choices.slice(0, 4).map(c => String(c)) : ['1번', '2번', '3번', '4번'],
-          timeLimit: clamp(parseInt(q.timeLimit, 10) || (q.type==='RACE'?120:12), 5, q.type==='RACE'?300:60)
+          timeLimit: clamp(parseInt(q.timeLimit, 10) || (q.type==='RACE'?(q.raceQuestions?.length||1)*15:12), 5, q.type==='RACE'?300:60)
         }))
       : JSON.parse(JSON.stringify(DEFAULT_QUIZ_LIST));
 
@@ -376,7 +376,8 @@ class Room {
       this.minorityOutcome={leftCount,rightCount,tie,winningZone};
       correctAnswer=winningZone;
     }
-    const answerIntro=q.type==='RACE'?`OX 레이스 완주 ${this.race.liveFinishers().length}명!`:q.type==='MINORITY'
+    if(q.type==='RACE')this.race.finalize();
+    const answerIntro=q.type==='RACE'?`OX 레이스 ${this.race.qualified.length}명 통과! 완주 ${this.race.liveFinishers().length}명 · 진행도 순위 ${Math.max(0,this.race.qualified.length-this.race.liveFinishers().length)}명`:q.type==='MINORITY'
       ? `${correctAnswer==='LEFT'?'왼쪽':'오른쪽'} 승리! 왼쪽 ${this.minorityOutcome.leftCount}명 · 오른쪽 ${this.minorityOutcome.rightCount}명${this.minorityOutcome.tie?' · 동수 무작위 결정':''}.`
       : `정답은 [${correctAnswer}]!`;
 
@@ -397,10 +398,6 @@ class Room {
       }
       return false;
     };
-    if(q.type==='RACE'&&!this.race.liveFinishers().length){
-      this.hostSpeech='완주자가 없어 같은 레이스를 다시 시작합니다!';this.lastNotice='완주자 0명 · 탈락 없이 재도전';
-      this.broadcastRoomEvent({raceRetry:true});this.timerHandle=setTimeout(()=>{this.currentQuestionIndex--;this.nextQuestion();},JUDGE_DURATION_MS);return;
-    }
 
     if (q.isRevival) {
       // 패자부활전: 유령 참가자의 인원으로 조기 종료를 판정하지 않고, 부활 결과를 반영한 실제 생존 인원 기준으로 판단

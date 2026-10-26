@@ -19,7 +19,7 @@
       const choices=q.choices??['','','',''];
       if(!Array.isArray(choices)||choices.some(c=>typeof c!=='string'))invalid('보기 내용을 확인해 주세요.');
       const limitError=limits.error({...q,choices});if(limitError&&!allowLegacyLengths)invalid(limitError);
-      const timeLimit=q.timeLimit??(q.type==='RACE'?120:12);
+      const timeLimit=q.timeLimit??(q.type==='RACE'?q.raceQuestions.length*15:12);
       if(!Number.isFinite(timeLimit)||timeLimit<5||timeLimit>(q.type==='RACE'?300:60))invalid(q.type==='RACE'?'레이스 제한시간은 5~300초여야 해요.':'제한시간은 5~60초여야 해요.');
       return {type:q.type,question:q.question,answer:['MINORITY','RACE'].includes(q.type)?'':q.answer,choices:[0,1,2,3].map(n=>choices[n]??''),timeLimit,isRevival:q.isRevival===true,inputMode:q.inputMode==='MOVE'?'MOVE':'BUTTON',ignoreSpaces:q.ignoreSpaces!==false,caseSensitive:q.caseSensitive===true,...(q.type==='RACE'?{raceQuestions:q.raceQuestions.map(item=>({question:item.question,answer:item.answer}))}:{})};
     });

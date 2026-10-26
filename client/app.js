@@ -425,7 +425,7 @@ function syncRaceScene(){
 function renderRaceInfo(){
  if(!raceActive)return;const q=roomState.currentQuestion,own=raceOwn?.roundId===roomState.roundId?raceOwn:null;
  document.getElementById('q-type-sub').textContent=`OX 레이스 · ${own?.progress||0}/${q.raceTotal}`;
- document.getElementById('q-main-text').textContent=roomState.state==='JUDGE'?(roomState.raceRetry?'완주자가 없어 다시 도전해요!':`레이스 종료! 완주 ${own?.finishedCount||0}명 통과`):roomState.state==='PREPARING'?'왼쪽 O · 오른쪽 X — 곧 출발해요!':own?.rank?`${own.rank}등 완주!`:(own?.participant?own.question:'레이스 참가자를 기다리는 중…');
+ document.getElementById('q-main-text').textContent=roomState.state==='JUDGE'?`레이스 종료! ${own?.qualifiedCount??own?.finishedCount??0}명 통과 · 완주 ${own?.finishedCount||0}명`:roomState.state==='PREPARING'?'왼쪽 O · 오른쪽 X — 곧 출발해요!':own?.rank?`${own.rank}등 완주!`:(own?.participant?own.question:'레이스 참가자를 기다리는 중…');
  document.getElementById('race-feedback').textContent=`선착순 ${own?.finishedCount||0}/${q.raceQuota}명 · ${own?.notice||'T자 길을 따라가세요 · 오답은 재도전'}`;
 }
 function receiveRaceState(msg){
@@ -729,7 +729,7 @@ function computeOverheadBadge(entity) {
     return { text: entity.alive?'생존 · 대기':'유령', theme: 'GHOST' };
   }
   if(state==='BREAK')return {text:'휴식',theme:'MINORITY'};
-  if(q?.type==='RACE')return {text:entity.raceRank?`${entity.raceRank}등 완주`:`${entity.raceProgress||0}/${q.raceTotal} 완료`,theme:'MINORITY'};
+ if(q?.type==='RACE')return {text:state==='JUDGE'?(entity.lastResult==='PASS'?'통과':entity.lastResult==='REVIVED'?'부활':'탈락'):entity.raceRank?`${entity.raceRank}등 완주`:`${entity.raceProgress||0}/${q.raceTotal} 완료`,theme:'MINORITY'};
   if(q?.type==='MINORITY')return {text:entity.zoneId==='LEFT'?'왼쪽':'오른쪽',theme:'MINORITY'};
 
   // 무대 위 참가자인 경우
