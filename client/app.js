@@ -100,6 +100,22 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = false;
 container.appendChild(renderer.domElement);
+const clarityQuery=new URLSearchParams(location.search).get('clarity');
+const clarityExperiment=['compare','off','sharpen','upscale'].includes(clarityQuery);
+const sceneClarity=SceneClarity.create(renderer,clarityQuery==='compare'?'sharpen':clarityQuery);
+function updateClarityButton(){
+  const state=sceneClarity.stats(),button=document.getElementById('clarity-toggle');
+  button.hidden=!clarityExperiment;
+  button.textContent=state.failed?'화질: 기본 (자동복귀)':state.supported?`화질: ${{off:'기본',sharpen:'선명',upscale:'균형'}[state.mode]}`:'화질: 기본 (미지원)';
+  button.title=state.mode==='upscale'?'내부 해상도 85% + 확대·선명화':state.mode==='sharpen'?'기존 해상도 + 대비 적응 선명화':'기존 직접 렌더링';
+  button.disabled=!state.supported||state.failed;
+}
+sceneClarity.onFallback=updateClarityButton;
+window.cycleClarity=function(){
+  const modes=['off','sharpen','upscale'],next=modes[(modes.indexOf(sceneClarity.stats().mode)+1)%modes.length];
+  sceneClarity.setMode(next);updateClarityButton();document.getElementById('clarity-toggle').blur();
+};
+updateClarityButton();
 const nameplates = document.createElement('div');
 nameplates.id = 'player-names';
 container.appendChild(nameplates);
@@ -485,7 +501,7 @@ function updateCameraForScreen() {
   // setSize clears the drawing buffer even when its dimensions did not change.
   const renderSize=renderer.getSize(new THREE.Vector2());
   const ratio=RenderBudget.pixelRatio(w,h,devicePixelRatio);
-  if(renderSize.x!==w||renderSize.y!==h||Math.abs(renderer.getPixelRatio()-ratio)>.001){renderer.setPixelRatio(ratio);renderer.setSize(w,h);renderer.render(scene,camera);}
+  if(renderSize.x!==w||renderSize.y!==h||Math.abs(renderer.getPixelRatio()-ratio)>.001){renderer.setPixelRatio(ratio);renderer.setSize(w,h);sceneClarity.render(scene,camera);}
   if(isSceneInputFocused()&&!chatSceneLayout)freezeSceneForInput();
 }
 window.addEventListener('resize', updateCameraForScreen);
@@ -997,7 +1013,7 @@ function animate(frameTime) {
   MobileCrowd.flush();
   InstancedAvatars.flush(camera,viewHeight);
   CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
-  renderer.render(scene, camera);
+  sceneClarity.render(scene, camera);
   recordRenderedFrame(frameTime);
 }
 

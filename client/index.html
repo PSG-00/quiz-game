@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
-  <link rel="stylesheet" href="./style.css?v=37" />
+  <link rel="stylesheet" href="./style.css?v=38" />
   <link rel="stylesheet" href="./spectator.css?v=2" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -160,6 +160,7 @@
   <!-- ==================== 2. 인게임 시안 HUD ==================== -->
   <div id="game-hud" class="hidden">
     <div id="fps-meter" title="최근 약 1초간 실제 렌더링 FPS">FPS --</div>
+    <button id="clarity-toggle" type="button" hidden onclick="cycleClarity()">화질: 기본</button>
     <!-- 상단 중앙: 상태판 캡슐 + 문제 배너 + 골드 규칙 리본 -->
     <div class="top-hud-stack">
       <div id="question-board" class="question-banner hud-interactive">
@@ -411,13 +412,14 @@
   <script src="./mobileCrowd.js?v=4"></script>
   <script src="./framePacing.js?v=1"></script>
   <script src="./renderBudget.js?v=2"></script>
+  <script src="./sceneClarity.js?v=1"></script>
   <script src="./crowdDecorations.js?v=2"></script>
   <script src="./showHost.js?v=7"></script>
   <script src="./worldUpdates.js?v=1"></script>
   <script src="./roomStateSync.js?v=1"></script>
   <script src="./arenaRules.js?v=1"></script>
   <script src="./spectatorView.js?v=1"></script>
-  <script src="./app.js?v=68"></script>
+  <script src="./app.js?v=69"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

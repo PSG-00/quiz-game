@@ -2299,3 +2299,5 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 .keyboard-open #fps-meter { display:none; }
 /* Reuse moving text layers rather than invalidating the whole overlay each frame. */
 .player-name,.player-chat { will-change:transform;contain:layout style; }
+#clarity-toggle { position:fixed;left:80px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:22;padding:4px 7px;border:1px solid #c4d8cd;border-radius:6px;background:rgba(255,253,247,.95);color:#42665b;font:700 11px/1.2 system-ui,sans-serif;pointer-events:auto;cursor:pointer; }
+#clarity-toggle[hidden],.keyboard-open #clarity-toggle { display:none; }

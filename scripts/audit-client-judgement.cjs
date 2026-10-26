@@ -47,6 +47,7 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  assert.ok(result.overlayMotion.contentChangeReads>=2&&result.overlayMotion.contentChangeReads<=4,JSON.stringify(result.overlayMotion));
  const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
  assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=1728000);
+ assert.equal(await page.evaluate(()=>sceneClarity.stats().mode),'off');assert.equal(await page.evaluate(()=>sceneClarity.stats().targetCount),0);assert.equal(await page.locator('#clarity-toggle').isVisible(),false);
  result.renderSettings=renderSettings;
  await page.waitForFunction(()=>hostBackdrop.userData.imageLoaded);
  result.backdrop=await page.evaluate(()=>{
