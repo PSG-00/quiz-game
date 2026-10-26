@@ -50,30 +50,32 @@ window.ShowHost=(()=>{
  function update(root,time,state){const d=root.userData,talking=['QUESTION','JUDGE','COUNTDOWN','ENDED'].includes(state);const blink=time%4200>4050;const frame=blink?1:talking&&Math.floor(time/240)%2?2:0;if(frame!==d.lastFrame){d.texture.offset.x=frame*.25;d.lastFrame=frame;}d.body.position.y=Math.sin(time*.0018)*.018;d.body.rotation.z=Math.sin(time*.0012)*.012;}
  function createBackdrop(){
   // One opaque atlas; the approved photograph is drawn once without stretching.
-  const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=1024;
-  const ctx=canvas.getContext('2d'),frontHeight=648;
-  ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,2048,1024);
-  ctx.fillStyle='#fffaf1';ctx.fillRect(0,0,2048,frontHeight);
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,1024,1024);
   const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;
   const image=new Image();image.decoding='async';
   image.onload=()=>{
-    const width=frontHeight*image.width/image.height,left=(canvas.width-width)/2;
-    ctx.drawImage(image,left,0,width,frontHeight);
-    // A restrained mint rail extends the design across the wide stage wings.
-    ctx.strokeStyle='#9ac7b4';ctx.lineWidth=5;ctx.strokeRect(20,16,2008,frontHeight-32);
+    // Fill the entire front face. The 3:2 box restores the photo's aspect ratio.
+    ctx.drawImage(image,0,0,canvas.width,canvas.height);
     texture.needsUpdate=true;mesh.userData.imageLoaded=true;
   };
-  const geometry=new T.BoxGeometry(24,7.6,.22),uv=geometry.attributes.uv;
+  const geometry=new T.BoxGeometry(3,2,.22),uv=geometry.attributes.uv;
   for(let i=0;i<uv.count;i++){
-    if(Math.floor(i/4)===4)uv.setXY(i,uv.getX(i),1-frontHeight/1024+uv.getY(i)*frontHeight/1024);
-    else uv.setXY(i,.01,.1);
+    if(Math.floor(i/4)!==4)uv.setXY(i,.002,.998);
   }
   geometry.clearGroups();
   const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({map:texture}));
-  mesh.name='RESCENE member photo backdrop';mesh.position.set(0,3.7,-1.5);
-  mesh.userData={triangles:12,drawCalls:1,textureBytes:2048*1024*4,staticBackdrop:true,imageLoaded:false};
+  mesh.name='RESCENE member photo backdrop';mesh.position.set(0,4.1,-1.5);
+  mesh.userData={triangles:12,drawCalls:1,textureBytes:1024*1024*4,staticBackdrop:true,imageLoaded:false};
   image.src='./assets/stage/rescene-quiz-members-v2.webp';
   return mesh;
  }
- return {create,update,createBackdrop};
+ function layoutBackdrop(mesh,compact){
+  const height=compact?7:6.6;
+  mesh.scale.set(height/2,height/2,1);
+  mesh.position.y=.6+height/2;
+  mesh.userData.layout=compact?'mobile':'desktop';
+ }
+ return {create,update,createBackdrop,layoutBackdrop};
 })();

@@ -460,6 +460,7 @@ function updateCameraForScreen() {
   }
   worldGroup.scale.set(layoutScaleX,1,layoutScaleZ);
   podiumGroup.position.set(0,STAGE_HEIGHT,STAGE_MIN_Z*layoutScaleZ-1.9);
+  ShowHost.layoutBackdrop(hostBackdrop,window.matchMedia('(pointer:coarse)').matches||innerWidth<=680);
   // Always frame the outside spectator walkway, even before anyone is eliminated.
   spectatorStrip.scale.x=layoutScaleX;
   spectatorStrip.visible=true;
