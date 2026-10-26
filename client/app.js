@@ -193,6 +193,8 @@ addCornerBollard(ARENA_HALF_W + 0.7, STAGE_MAX_Z + 0.6, STAGE_HEIGHT);
 // outside worldGroup so adapting the board depth never stretches the host.
 const podiumGroup = new THREE.Group();
 scene.add(podiumGroup);
+const hostBackdrop=ShowHost.createBackdrop();
+podiumGroup.add(hostBackdrop);
 
 const podiumStepGeo = roundedSlab(6,.6,3,.4);
 const podiumStepMat = new THREE.MeshStandardMaterial({ color: 0xbca7d0, roughness: .7 });

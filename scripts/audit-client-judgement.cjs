@@ -46,6 +46,14 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
  assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=1600000);
  result.renderSettings=renderSettings;
+ result.backdrop=await page.evaluate(()=>{
+  renderer.render(scene,camera);const withBackdrop={...renderer.info.render};
+  hostBackdrop.visible=false;renderer.render(scene,camera);const without={...renderer.info.render};
+  hostBackdrop.visible=true;renderer.render(scene,camera);
+  return {extraDrawCalls:withBackdrop.calls-without.calls,extraTriangles:withBackdrop.triangles-without.triangles,opaque:!hostBackdrop.material.transparent,shadows:hostBackdrop.castShadow,texture:[hostBackdrop.material.map.image.width,hostBackdrop.material.map.image.height]};
+ });
+ assert.equal(result.backdrop.extraDrawCalls,1);assert.equal(result.backdrop.extraTriangles,12);assert.equal(result.backdrop.opaque,true);assert.equal(result.backdrop.shadows,false);
+ await page.screenshot({path:'artifacts/host-backdrop'+suffix+'.png'});
  if(!mobile){
   result.resizeBudget=[];
   for(const size of [{width:1920,height:1080},{width:2560,height:1440}]){
