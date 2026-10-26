@@ -101,18 +101,20 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = false;
 container.appendChild(renderer.domElement);
 const clarityQuery=new URLSearchParams(location.search).get('clarity');
-const clarityExperiment=['compare','off','sharpen','upscale'].includes(clarityQuery);
-const sceneClarity=SceneClarity.create(renderer,clarityQuery==='compare'?'sharpen':clarityQuery);
+const fxaaRequested=new URLSearchParams(location.search).get('aa')==='fxaa';
+const fxaaAllowed=fxaaRequested&&!(matchMedia('(pointer:coarse)').matches||(navigator.maxTouchPoints>0&&Math.min(innerWidth,innerHeight)<850));
+const clarityExperiment=['compare','off','sharpen','upscale'].includes(clarityQuery)||fxaaAllowed;
+const sceneClarity=SceneClarity.create(renderer,fxaaAllowed?'fxaa':clarityQuery==='compare'?'sharpen':clarityQuery);
 function updateClarityButton(){
   const state=sceneClarity.stats(),button=document.getElementById('clarity-toggle');
   button.hidden=!clarityExperiment;
-  button.textContent=state.failed?'화질: 기본 (자동복귀)':state.supported?`화질: ${{off:'기본',sharpen:'선명',upscale:'균형'}[state.mode]}`:'화질: 기본 (미지원)';
-  button.title=state.mode==='upscale'?'내부 해상도 85% + 확대·선명화':state.mode==='sharpen'?'기존 해상도 + 대비 적응 선명화':'기존 직접 렌더링';
+  button.textContent=state.failed?'화질: 기본 (자동복귀)':state.supported?`화질: ${{off:'기본',sharpen:'선명',upscale:'균형',fxaa:'FXAA'}[state.mode]}`:'화질: 기본 (미지원)';
+  button.title=state.mode==='fxaa'?'외곽 계단 현상 보정 (PC)':state.mode==='upscale'?'내부 해상도 85% + 확대·선명화':state.mode==='sharpen'?'기존 해상도 + 대비 적응 선명화':'기존 직접 렌더링';
   button.disabled=!state.supported||state.failed;
 }
 sceneClarity.onFallback=updateClarityButton;
 window.cycleClarity=function(){
-  const modes=['off','sharpen','upscale'],next=modes[(modes.indexOf(sceneClarity.stats().mode)+1)%modes.length];
+  const modes=fxaaAllowed?['off','fxaa']:['off','sharpen','upscale'],next=modes[(modes.indexOf(sceneClarity.stats().mode)+1)%modes.length];
   sceneClarity.setMode(next);updateClarityButton();document.getElementById('clarity-toggle').blur();
 };
 updateClarityButton();

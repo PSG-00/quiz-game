@@ -55,11 +55,20 @@ window.InstancedAvatars=(()=>{
        }
      }
    }
+   // LOD levels do not change bone matrices. Share identical palettes across
+   // parts too, instead of uploading the same animation texture up to 21 times.
+   const palettes=[];
+   for(const part of parts){
+     const shared=palettes.find(p=>p.data.length===part.data.length&&p.data.every((v,i)=>v===part.data[i]));
+     if(shared){part.texture=shared.texture;continue;}
+     const texture=new T.DataTexture(part.data,part.bones*4,frames+1,T.RGBAFormat,T.FloatType);
+     texture.minFilter=texture.magFilter=T.NearestFilter;texture.generateMipmaps=false;texture.needsUpdate=true;
+     part.texture=texture;palettes.push(part);
+   }
    const poses=Array.from({length:3},()=>new T.InstancedBufferAttribute(new Float32Array(capacity*2),2).setUsage(T.DynamicDrawUsage));
    const batches=parts.flatMap(part=>[0,1,2].map(level=>{
      const source=part.source,width=part.bones*4;
-     const texture=new T.DataTexture(part.data,width,frames+1,T.RGBAFormat,T.FloatType);
-     texture.minFilter=texture.magFilter=T.NearestFilter;texture.generateMipmaps=false;texture.needsUpdate=true;
+     const texture=part.texture;
      // A geometry wrapper owns only the per-pool pose attribute; source vertex
      // buffers and indices are read-only references shared with the local model.
      const geometry=new T.BufferGeometry();geometry.setIndex(level?(source.geometry.userData.lodIndices?.[level-1]||source.geometry.index):source.geometry.index);
@@ -119,6 +128,6 @@ window.InstancedAvatars=(()=>{
    }
  }
  function dispose(root){const d=root.userData;if(!d.pool.live.delete(root))return;hide(root);d.pool.free.push(d.slot);}
- function stats(){return {supported,lod:true,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,levels:p.counts||[0,0,0],draws:p.batches.filter(b=>b.mesh.visible).length,frames,bones:p.batches[0].texture.image.width/4,textureBytes:p.batches.reduce((n,b)=>n+b.texture.image.data.byteLength,0)}))};}
+ function stats(){return {supported,lod:true,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,levels:p.counts||[0,0,0],draws:p.batches.filter(b=>b.mesh.visible).length,frames,bones:p.batches[0].texture.image.width/4,textureBytes:[...new Set(p.batches.map(b=>b.texture))].reduce((n,t)=>n+t.image.data.byteLength,0)}))};}
  return {attach,create,update,hide,flush,dispose,stats};
 })();

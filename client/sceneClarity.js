@@ -4,7 +4,7 @@
  * Copyright (c) 2017-2019 Advanced Micro Devices, Inc. See AMD-CAS-LICENSE.txt.
  */
 (function(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;else root.SceneClarity=api;})(typeof window!=='undefined'?window:globalThis,root=>{
- const modes=['off','sharpen','upscale'];
+ const modes=['off','sharpen','upscale','fxaa'];
  function mode(value){return modes.includes(value)?value:'off';}
  function scale(value){return mode(value)==='upscale'?.85:1;}
  function create(renderer,initial='off'){
@@ -14,7 +14,9 @@
   const size=new T.Vector2();
   function release(){if(target){target.dispose();target=null;}width=height=0;}
   function initialize(){
-   if(material)return;
+   const kind=selected==='fxaa'?'fxaa':'cas';
+   if(material?.userData.kind===kind)return;
+   if(material){triangle?.geometry.dispose();material.dispose();}
    material=new T.ShaderMaterial({
     depthTest:false,depthWrite:false,toneMapped:false,
     uniforms:{source:{value:null},texel:{value:new T.Vector2()},amount:{value:strength}},
@@ -40,6 +42,11 @@
         gl_FragColor=vec4(sqrt(clamp(mix(c,enhanced,amount),0.0,1.0)),1.0);
       }`
    });
+   if(kind==='fxaa'){
+    if(!T.FXAAShader)throw Error('FXAA shader unavailable');
+    material.fragmentShader=T.FXAAShader.fragmentShader.replace(/\btDiffuse\b/g,'source').replace(/\bresolution\b/g,'texel');
+   }
+   material.userData.kind=kind;
    const geometry=new T.BufferGeometry();
    geometry.setAttribute('position',new T.Float32BufferAttribute([-1,-1,0,3,-1,0,-1,3,0],3));
    geometry.setAttribute('uv',new T.Float32BufferAttribute([0,0,2,0,0,2],2));
@@ -75,7 +82,7 @@
     }
    },
    stats(){renderer.getDrawingBufferSize(size);return {mode:selected,supported,failed,inputWidth:target?width:size.x,inputHeight:target?height:size.y,outputWidth:size.x,outputHeight:size.y,targetCount:target?1:0,extraDraws:selected==='off'?0:1,strength};},
-   dispose(){selected='off';release();if(material){triangle.geometry.dispose();material.dispose();material=triangle=screen=screenCamera=null;}}
+   dispose(){selected='off';release();if(material){triangle?.geometry.dispose();material.dispose();material=triangle=screen=screenCamera=null;}}
   };
   return api;
  }

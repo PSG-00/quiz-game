@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),WebSocket=require('ws'),{fork}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/psg00/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const port=Number(process.env.AUDIT_PORT||3133),base='http://127.0.0.1:'+port,requests=new Map();let child,browser,guest,serial=0;
-const mobile=process.env.AUDIT_MOBILE==='1',query=process.env.AUDIT_QUERY||'',suffix=(query.includes('compact')?'-compact':'')+(mobile?'-mobile':''),viewport=mobile?{width:390,height:844}:{width:1280,height:800};
+const mobile=process.env.AUDIT_MOBILE==='1',query=process.env.AUDIT_QUERY||'',fxaa=query.includes('aa=fxaa')&&!mobile,pixelLimit=query.includes('quality=ultra')?2592000:query.includes('quality=crisp')?2073600:1728000,suffix=(query.includes('model=atlas')?'-atlas':query.includes('compact')?'-compact':'')+(fxaa?'-fxaa':'')+(mobile?'-mobile':''),viewport=mobile?{width:390,height:844}:{width:1280,height:800};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(let i=0;i<600;i++){try{const value=await fn();if(value)return value;}catch{}await sleep(20);}throw Error('Audit timeout');}
 function control(command,data={}){return new Promise((resolve,reject)=>{const id=++serial;requests.set(id,{resolve,reject});child.send({id,command,...data});});}
 (async()=>{const result={viewport,device:mobile?'desktop Chromium mobile viewport; not a physical phone':'desktop Chromium'};fs.mkdirSync('artifacts',{recursive:true});try{
@@ -45,9 +45,17 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  assert.ok(result.overlayMotion.distinctPositions>=22,JSON.stringify(result.overlayMotion));
  assert.ok(result.overlayMotion.movementReads<=8,JSON.stringify(result.overlayMotion));
  assert.ok(result.overlayMotion.contentChangeReads>=2&&result.overlayMotion.contentChangeReads<=4,JSON.stringify(result.overlayMotion));
- const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
- assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=(query.includes('quality=crisp')?2073600:1728000));
- assert.equal(await page.evaluate(()=>sceneClarity.stats().mode),'off');assert.equal(await page.evaluate(()=>sceneClarity.stats().targetCount),0);assert.equal(await page.locator('#clarity-toggle').isVisible(),false);
+ const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,legacyFxaaWrapperLoaded:typeof SceneAntialias!=='undefined',postprocess:sceneClarity.stats().mode,shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
+ assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.legacyFxaaWrapperLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=pixelLimit);
+ assert.equal(await page.evaluate(()=>sceneClarity.stats().mode),fxaa?'fxaa':'off');assert.equal(await page.evaluate(()=>sceneClarity.stats().targetCount),fxaa?1:0);assert.equal(await page.locator('#clarity-toggle').isVisible(),fxaa);
+ if(fxaa){
+  await page.locator('#clarity-toggle').click();await page.waitForFunction(()=>sceneClarity.stats().mode==='off'&&sceneClarity.stats().targetCount===0);
+  await page.locator('#clarity-toggle').click();await page.waitForFunction(()=>sceneClarity.stats().mode==='fxaa'&&sceneClarity.stats().targetCount===1);
+ }
+ if(query.includes('model=atlas')){
+  result.atlas=await page.evaluate(()=>{const root=playerEntities.get(myClientId).charSprite,meshes=[];root.traverse(o=>{if(o.isMesh)meshes.push(o);});return {profile:root.userData.atlasProfile,meshes:meshes.length,bones:[...new Set(meshes.flatMap(m=>m.skeleton.bones))].length};});
+  assert.equal(result.atlas.meshes,2);assert.equal(result.atlas.bones,19);
+ }
  result.renderSettings=renderSettings;
  await page.waitForFunction(()=>hostBackdrop.userData.imageLoaded);
  result.backdrop=await page.evaluate(()=>{
@@ -66,7 +74,7 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
   assert.equal(await page.evaluate(()=>hostBackdrop.material.map.uuid),backdropTexture);
   result.resizeBudget=[];
   for(const size of [{width:1920,height:1080},{width:2560,height:1440}]){
-   await page.setViewportSize(size);await page.waitForFunction(limit=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=limit,query.includes('quality=crisp')?2073600:1728000);
+   await page.setViewportSize(size);await page.waitForFunction(limit=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=limit,pixelLimit);
    result.resizeBudget.push(await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {width:innerWidth,height:innerHeight,pixels:size.x*size.y,ratio:renderer.getPixelRatio()};}));
   }
   await page.setViewportSize(viewport);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth);

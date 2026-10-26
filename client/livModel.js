@@ -1,8 +1,8 @@
 /* Actual Blender GLB, loaded once and shared by all Liv instances. */
 function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
  // Opt-in asset comparison; keep original model URLs and normal rendering intact.
- const compact=new URLSearchParams(location.search).get('model')==='compact';
- if(compact){asset=asset.replace(/\.glb$/,'-compact-v1.glb');version+='-compact-v1';}
+ const variant=new URLSearchParams(location.search).get('model'),compact=['compact','atlas'].includes(variant);
+ if(compact){const suffix=variant==='atlas'?'-atlas-v1':'-compact-v1';asset=asset.replace(/\.glb$/,suffix+'.glb');version+=suffix;}
  let template=null,error=null;
  const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,175,175,175,228,228,228,255,255,255]),4,1,THREE.RGBFormat);
  gradient.minFilter=gradient.magFilter=THREE.NearestFilter;gradient.generateMipmaps=false;gradient.needsUpdate=true;
@@ -15,6 +15,7 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
    const scale=2.95/(bodyReference||height);
    gltf.scene.scale.setScalar(scale);gltf.scene.position.y=bodyReference?0:-bounds.min.y*scale;
    template=new THREE.Group();template.add(gltf.scene);template.userData.visualHeight=height*scale;template.userData.bodyReferenceHeight=bodyReference?2.95:null;template.userData.bodyProfile=bodyReference?'standard-lean-v2':null;
+   gltf.scene.traverse(o=>{if(o.userData.atlasProfile)template.userData.atlasProfile=o.userData.atlasProfile;});
    // glTF meshes face +Z after Blender's Y-up conversion.
    template.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
    resolve(true);window.dispatchEvent(new CustomEvent('avatar-model-ready',{detail:{avatarId}}));if(avatarId==='liv')window.dispatchEvent(new Event('liv-model-ready'));
@@ -37,7 +38,7 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
   root.updateMatrixWorld(true);
   const joints=new Map();body.traverse(o=>{if(o.isBone)joints.set(o.name,{bone:o,rest:o.quaternion.clone(),axis:new THREE.Vector3(1,0,0).applyQuaternion(o.getWorldQuaternion(new THREE.Quaternion()).invert())});});
   const contacts=[];for(const side of [-1,1]){const foot=joints.get('Foot_'+side).bone,position=foot.getWorldPosition(new THREE.Vector3());for(const z of [-.07,.17])contacts.push({bone:foot,point:foot.worldToLocal(new THREE.Vector3(position.x,0,position.z+z))});}
-  root.userData={avatarId,visualHeight:template.userData.visualHeight,bodyReferenceHeight:template.userData.bodyReferenceHeight,bodyProfile:template.userData.bodyProfile,importedGLB:true,importedLiv:avatarId==='liv',modelVersion:version,rigVersion:3,body,materials,limbs,joints,contacts,animation:AvatarMotion.create(),ghost:null};return root;
+  root.userData={avatarId,visualHeight:template.userData.visualHeight,bodyReferenceHeight:template.userData.bodyReferenceHeight,bodyProfile:template.userData.bodyProfile,atlasProfile:template.userData.atlasProfile,importedGLB:true,importedLiv:avatarId==='liv',modelVersion:version,rigVersion:3,body,materials,limbs,joints,contacts,animation:AvatarMotion.create(),ghost:null};return root;
  }
  const jointTurn=new THREE.Quaternion(),contactPosition=new THREE.Vector3(),inverseRoot=new THREE.Matrix4(),worldY=new THREE.Vector3(0,1,0),worldZ=new THREE.Vector3(0,0,1);
  function update(root,ghost,moving,time,seed,motion){

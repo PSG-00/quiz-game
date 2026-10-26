@@ -27,9 +27,11 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  const reports=[];
  const clarity=process.env.PROFILE_CLARITY==='1';
  const compact=process.env.PROFILE_COMPACT==='1';
- for(const mode of compact?['original','compact','crisp','original','compact','crisp']:clarity?['off','sharpen','upscale','off','sharpen','upscale']:['unpromoted','optimized','unpromoted','optimized']){
-  if(compact){
-   await page.goto(base+(mode==='original'?'':mode==='compact'?'/?model=compact':'/?model=compact&quality=crisp'));
+ const atlas=process.env.PROFILE_ATLAS==='1';
+ for(const mode of atlas?['original','atlas','ultra','fxaa','original','atlas','ultra','fxaa']:compact?['original','compact','crisp','original','compact','crisp']:clarity?['off','sharpen','upscale','off','sharpen','upscale']:['unpromoted','optimized','unpromoted','optimized']){
+  if(compact||atlas){
+   const url=mode==='original'?'':mode==='atlas'?'/?model=atlas':mode==='ultra'?'/?model=atlas&quality=ultra':mode==='fxaa'?'/?model=atlas&quality=ultra&aa=fxaa':mode==='compact'?'/?model=compact':'/?model=compact&quality=crisp';
+   await page.goto(base+url);
    await page.waitForFunction(()=>libraryReady&&ws?.readyState===1);
    await page.evaluate(id=>{if(currentRoomId!==id)ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:id,nickname:'프로파일',worldDelta:true}));},room.id);
    await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded)&&playerEntities.size===50,{},{timeout:120000});await sleep(4000);
@@ -40,9 +42,9 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
   reports.push(await page.evaluate(()=>{
    profileCrowd.active=false;const elapsed=performance.now()-profileCrowd.start,frames=profileCrowd.frames;
    const mean=key=>frames.reduce((n,f)=>n+f[key],0)/frames.length;
-   return {clarity:sceneClarity.stats(),mode:profileCrowd.mode,players:playerEntities.size,frames:frames.length,renderFps:frames.length*1000/elapsed,rafFps:profileCrowd.raw*1000/elapsed,meanMs:{js:mean('js'),labels:mean('labels'),host:mean('host'),render:mean('render')},calls:mean('calls'),triangles:mean('triangles')};
+   return {clarity:sceneClarity.stats(),instancing:InstancedAvatars.stats(),mode:profileCrowd.mode,players:playerEntities.size,frames:frames.length,renderFps:frames.length*1000/elapsed,rafFps:profileCrowd.raw*1000/elapsed,meanMs:{js:mean('js'),labels:mean('labels'),host:mean('host'),render:mean('render')},calls:mean('calls'),triangles:mean('triangles')};
   }));
  }
  for(const report of reports){assert.equal(report.players,50);assert.ok(report.frames>0,'No rendered frames captured');}
- fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync(compact?`artifacts/compact-crowd-profile${mobile?'-mobile':''}.json`:clarity?'artifacts/clarity-crowd-profile.json':'artifacts/crowd-profile.json',JSON.stringify(reports,null,2));console.log(JSON.stringify(reports,null,2));
+ fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync(atlas?`artifacts/atlas-crowd-profile${mobile?'-mobile':''}.json`:compact?`artifacts/compact-crowd-profile${mobile?'-mobile':''}.json`:clarity?'artifacts/clarity-crowd-profile.json':'artifacts/crowd-profile.json',JSON.stringify(reports,null,2));console.log(JSON.stringify(reports,null,2));
 }finally{if(browser)await browser.close();if(child)child.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

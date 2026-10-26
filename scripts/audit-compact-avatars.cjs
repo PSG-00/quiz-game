@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{fork}=require('node:child_process');
 const {chromium}=require('C:/Users/psg00/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-let browser,child;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),detail=Number(process.env.AUDIT_LOD||0),walking=process.env.AUDIT_WALK==='1',suffix=detail||walking?`-lod${detail}${walking?'-walk':''}`:'';
+let browser,child;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),detail=Number(process.env.AUDIT_LOD||0),walking=process.env.AUDIT_WALK==='1',variant=process.env.AUDIT_VARIANT||'compact',suffix=(variant==='atlas'?'-atlas':'')+(detail||walking?`-lod${detail}${walking?'-walk':''}`:'');
 (async()=>{try{
  child=fork(path.join(__dirname,'lib/auditServer.cjs'),[],{env:{...process.env,PORT:'3144'},silent:true});child.stdout.resume();child.stderr.resume();
  for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:3144')).ok)break;}catch{}await sleep(100);}
@@ -10,8 +10,8 @@ let browser,child;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),detail=Number
  await page.evaluate(()=>{window.pauseForCompactAudit=true;});
  const report=[];fs.mkdirSync('artifacts/compact-comparison',{recursive:true});
  for(const [id,file] of Object.entries({woni:'woni-sd-v3-walk',liv:'liv-sd-v7-walk',minami:'minami-pink-sd-v2-walk',may:'may-sd-v2-walk','may-school':'may-school-sd-v2-walk',zena:'zena-sd-v2-walk'})){
-  const r=await page.evaluate(async({id,file,detail,walking})=>{
-   const original=AvatarModels[id],compact=createBakedAvatarModel('./assets/models/'+file+'-compact-v1.glb',id,'compact-audit',{lazy:true});await compact.load();if(!compact.loaded)throw Error('Compact load failed: '+id);
+  const r=await page.evaluate(async({id,file,detail,walking,variant})=>{
+   const original=AvatarModels[id],compact=createBakedAvatarModel('./assets/models/'+file+(variant==='atlas'?'-atlas-v1.glb':'-compact-v1.glb'),id,'compact-audit',{lazy:true});await compact.load();if(!compact.loaded)throw Error('Compact load failed: '+id);
    const a=original.create(),b=compact.create();original.update(a,false,false,0,0);compact.update(b,false,false,0,0);
    if(walking){original.update(a,false,true,0,0,{phase:Math.PI/2,blend:1});compact.update(b,false,true,0,0,{phase:Math.PI/2,blend:1});}
    // Always compare against the original full-detail reference, not another
@@ -29,10 +29,11 @@ let browser,child;const sleep=ms=>new Promise(r=>setTimeout(r,ms)),detail=Number
     let union=0,xor=0,difference=0;for(let i=0;i<pixels[0].length;i+=4){const fg=p=>p[i]<250||p[i+1]<250||p[i+2]<250,fa=fg(pixels[0]),fb=fg(pixels[1]);if(fa||fb){union++;if(fa!==fb)xor++;for(let k=0;k<3;k++)difference+=Math.abs(pixels[0][i+k]-pixels[1][i+k]);}}
     measurements.push({view,silhouetteMismatch:xor/union,meanForegroundByteDifference:difference/(union*3)});
    }
-   original.dispose(a);compact.dispose(b);return {id,measurements,png:sheet.toDataURL('image/png')};
-  },{id,file,detail,walking});
+   const atlasProfile=b.userData.atlasProfile;original.dispose(a);compact.dispose(b);return {id,atlasProfile,measurements,png:sheet.toDataURL('image/png')};
+  },{id,file,detail,walking,variant});
   fs.writeFileSync(`artifacts/compact-comparison/${id}${suffix}.png`,Buffer.from(r.png.split(',')[1],'base64'));delete r.png;report.push(r);
   for(const m of r.measurements)assert.ok(m.silhouetteMismatch<.035,JSON.stringify(r));
+  if(variant==='atlas')assert.equal(r.atlasProfile?.meshes,2,'Atlas merge must not silently fall back');
  }
  assert.deepEqual(errors,[]);fs.writeFileSync(`artifacts/compact-visual-audit${suffix}.json`,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{if(browser)await browser.close();if(child)child.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

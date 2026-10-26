@@ -62,6 +62,8 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
   sceneClarity.setStrength(.65);return {maxByteDifference:max,meanByteDifference:sum/before.length};
  });
  assert.ok(report.gameIdentity.maxByteDifference<=2,JSON.stringify(report.gameIdentity));
+ report.fxaa=await page.evaluate(()=>{sceneClarity.setMode('fxaa');sceneClarity.render(scene,camera);return {...sceneClarity.stats(),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles};});
+ assert.equal(report.fxaa.mode,'fxaa');assert.equal(report.fxaa.failed,false);assert.equal(report.fxaa.calls,report.modes[0].calls+1);
  report.colors=await page.evaluate(()=>{
   renderer.setPixelRatio(1);renderer.setSize(96,64,false);
   const s=new THREE.Scene();s.background=new THREE.Color(0xeee8e2);

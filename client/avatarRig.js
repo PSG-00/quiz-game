@@ -6,6 +6,8 @@ window.AvatarRig=(()=>{
   scene.updateMatrixWorld(true);
   const meshes=[],byName=new Map();scene.traverse(o=>{if(o.isMesh)meshes.push(o);if(o.isBone)byName.set(o.name,o);});
   const original=meshes.find(m=>m.isSkinnedMesh)?.skeleton;if(!original||!byName.has('Root'))return;
+  // Atlas GLBs already contain this prepared rig; never append joints twice.
+  if(original.bones.length===19&&['Spine','Chest','Neck','Head','Hand_-1','Hand_1'].every(name=>byName.has(name)))return;
   const bones=original.bones.slice(),root=byName.get('Root'),hips=root.getWorldPosition(new T.Vector3());
   const armY=(byName.get('Arm_-1').getWorldPosition(new T.Vector3()).y+byName.get('Arm_1').getWorldPosition(new T.Vector3()).y)/2;
   const height=armY-hips.y;

@@ -4,3 +4,5 @@ artifacts/
 
 data/
 client/perf/
+# Intermediate atlas images/packing metadata; final self-contained GLBs are tracked.
+client/assets/models/*-compact-v1.atlas*
