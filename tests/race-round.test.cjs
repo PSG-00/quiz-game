@@ -6,6 +6,15 @@ function begin(room){room.gameId='race-test';room.nextQuestion({skipPreparation:
 function gate(room,id,answer,now=Date.now()+1000){room.movePlayer(id,0,Rules.JUNCTION_Z,{now:now-2});room.movePlayer(id,answer==='O'?-8.5:8.5,Rules.JUNCTION_Z,{now:now-1});room.movePlayer(id,answer==='O'?-8.5:8.5,Rules.PORTAL_Z,{now});}
 function solve(room,id,now=Date.now()+1000){const r=room.race.runners.get(id),item=room.race.items[r.order[r.progress]];gate(room,id,item.answer,now);}
 test('레이스 정원은 시작 인원의 절반 내림이며 25→12, 50→25, 1→1',()=>{assert.equal(Rules.quota(25),12);assert.equal(Rules.quota(50),25);assert.equal(Rules.quota(1),1);assert.equal(Rules.quota(0),0);});
+
+test('모두 같은 공통 문제 순서를 받고 정답·오답·재접속이 다른 사람 순서에 영향 없음',()=>{
+ const items=Array.from({length:6},(_,i)=>({question:'문제 '+i,answer:i%2?'X':'O'})),room=setup(6,items);begin(room);
+ const order=room.race.runners.get('p0').order.slice();assert.deepEqual(order.slice().sort((a,b)=>a-b),[0,1,2,3,4,5]);
+ for(const runner of room.race.runners.values())assert.deepEqual(runner.order,order);
+ const time=Date.now()+1000;solve(room,'p0',time);const runner=room.race.runners.get('p0'),answer=room.race.items[runner.order[runner.progress]].answer;
+ gate(room,'p0',answer==='O'?'X':'O',time+1000);room.disconnectPlayer('p0');room.resumePlayer(room.players.get('p0'),null);
+ assert.equal(runner.progress,1);assert.equal(room.race.runners.get('p1').progress,0);for(const r of room.race.runners.values())assert.deepEqual(r.order,order);assert.deepEqual(room.questions[0].raceQuestions,items);
+});
 test('벽을 가로질러 선택 문으로 건너뛸 수 없고 T자 경로만 이동',()=>{const blocked=Rules.move(Rules.START,{x:8,z:5.5});assert.ok(blocked.x<=1.65);assert.equal(blocked.z,5.5);const corner=Rules.move({x:0,z:Rules.JUNCTION_Z},{x:-8.5,z:Rules.JUNCTION_Z});assert.equal(Rules.gate(corner.x,corner.z),'');const portal=Rules.move(corner,{x:-8.5,z:Rules.PORTAL_Z});assert.equal(Rules.gate(portal.x,portal.z),'O');assert.equal(Rules.inside(5,4),false);});
 test('25명 중 12명만 서버 도착 순서대로 통과하고 그 즉시 나머지 입력 잠금',()=>{
  const room=setup(25,[questions[0]]);begin(room);for(let i=0;i<12;i++)solve(room,'p'+i,Date.now()+i*1000+1000);

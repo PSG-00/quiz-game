@@ -2,7 +2,11 @@ const crypto=require('node:crypto'),Rules=require('../client/raceRules');
 class RaceRound{
  constructor(room,question){
   this.room=room;this.items=question.raceQuestions;this.quota=Rules.quota(room.roundParticipants.size);this.runners=new Map();this.finished=[];this.qualified=null;this.progressSequence=0;
-  for(const id of room.roundParticipants){const order=this.items.map((_,i)=>i);for(let i=order.length-1;i>0;i--){const j=crypto.randomInt(i+1);[order[i],order[j]]=[order[j],order[i]];}this.runners.set(id,{order,progress:0,progressUpdatedAt:null,progressOrder:0,rank:0,seq:0,notice:'출발! 왼쪽 O · 오른쪽 X',lastGate:0});const p=room.players.get(id);Object.assign(p,Rules.START,{moveCredit:0,lastMoveAt:Date.now()});}
+  const order=this.items.map((_,i)=>i);
+  for(let i=order.length-1;i>0;i--){const j=crypto.randomInt(i+1);[order[i],order[j]]=[order[j],order[i]];}
+  // One immutable question order per round; each runner advances independently.
+  this.order=Object.freeze(order);
+  for(const id of room.roundParticipants){this.runners.set(id,{order:this.order,progress:0,progressUpdatedAt:null,progressOrder:0,rank:0,seq:0,notice:'출발! 왼쪽 O · 오른쪽 X',lastGate:0});const p=room.players.get(id);Object.assign(p,Rules.START,{moveCredit:0,lastMoveAt:Date.now()});}
  }
  liveFinishers(){return this.finished.filter(id=>this.room.players.get(id)?.eligible!==false&&this.room.players.has(id));}
  passed(id){return (this.qualified||this.liveFinishers().slice(0,this.quota)).includes(id);}
