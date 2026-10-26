@@ -51,12 +51,16 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
   renderer.render(scene,camera);const withBackdrop={...renderer.info.render};
   hostBackdrop.visible=false;renderer.render(scene,camera);const without={...renderer.info.render};
   hostBackdrop.visible=true;renderer.render(scene,camera);
-  return {extraDrawCalls:withBackdrop.calls-without.calls,extraTriangles:withBackdrop.triangles-without.triangles,layout:hostBackdrop.userData.layout,width:hostBackdrop.geometry.parameters.width*hostBackdrop.scale.x,height:hostBackdrop.geometry.parameters.height*hostBackdrop.scale.y,opaque:!hostBackdrop.material.transparent,shadows:hostBackdrop.castShadow,texture:[hostBackdrop.material.map.image.width,hostBackdrop.material.map.image.height]};
+  return {extraDrawCalls:withBackdrop.calls-without.calls,extraTriangles:withBackdrop.triangles-without.triangles,texelAspect:(hostBackdrop.geometry.attributes.uv.getX(17)-hostBackdrop.geometry.attributes.uv.getX(16))*hostBackdrop.material.map.image.width/((hostBackdrop.geometry.attributes.uv.getY(16)-hostBackdrop.geometry.attributes.uv.getY(18))*hostBackdrop.material.map.image.height),layout:hostBackdrop.userData.layout,width:hostBackdrop.geometry.parameters.width*hostBackdrop.scale.x,height:hostBackdrop.geometry.parameters.height*hostBackdrop.scale.y,opaque:!hostBackdrop.material.transparent,shadows:hostBackdrop.castShadow,texture:[hostBackdrop.material.map.image.width,hostBackdrop.material.map.image.height]};
  });
- assert.equal(result.backdrop.extraDrawCalls,1);assert.equal(result.backdrop.extraTriangles,12);assert.equal(result.backdrop.layout,mobile?'mobile':'desktop');assert.ok(Math.abs(result.backdrop.width/result.backdrop.height-1.5)<.001);assert.equal(result.backdrop.height,mobile?7:6.6);assert.equal(result.backdrop.opaque,true);assert.equal(result.backdrop.shadows,false);
+ assert.ok(Math.abs(result.backdrop.texelAspect-(mobile?1.8:3))<.001);assert.equal(result.backdrop.extraDrawCalls,1);assert.equal(result.backdrop.extraTriangles,12);assert.equal(result.backdrop.layout,mobile?'mobile':'desktop');assert.ok(Math.abs(result.backdrop.width/result.backdrop.height-(mobile?1.8:3))<.001);assert.equal(result.backdrop.height,mobile?8:26/3);assert.equal(result.backdrop.opaque,true);assert.equal(result.backdrop.shadows,false);
  await page.evaluate(()=>{for(const p of playerEntities.values())p.chatExpireAt=0;});await sleep(50);
  await page.screenshot({path:'artifacts/host-backdrop'+suffix+'.png'});
  if(!mobile){
+  const backdropTexture=await page.evaluate(()=>hostBackdrop.material.map.uuid);
+  await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>hostBackdrop.userData.layout==='mobile'&&hostBackdrop.userData.imageLoaded);
+  await page.setViewportSize(viewport);await page.waitForFunction(()=>hostBackdrop.userData.layout==='desktop'&&hostBackdrop.userData.imageLoaded);
+  assert.equal(await page.evaluate(()=>hostBackdrop.material.map.uuid),backdropTexture);
   result.resizeBudget=[];
   for(const size of [{width:1920,height:1080},{width:2560,height:1440}]){
    await page.setViewportSize(size);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=1600000);

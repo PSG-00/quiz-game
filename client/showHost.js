@@ -50,32 +50,49 @@ window.ShowHost=(()=>{
  function update(root,time,state){const d=root.userData,talking=['QUESTION','JUDGE','COUNTDOWN','ENDED'].includes(state);const blink=time%4200>4050;const frame=blink?1:talking&&Math.floor(time/240)%2?2:0;if(frame!==d.lastFrame){d.texture.offset.x=frame*.25;d.lastFrame=frame;}d.body.position.y=Math.sin(time*.0018)*.018;d.body.rotation.z=Math.sin(time*.0012)*.012;}
  function createBackdrop(){
   // One opaque atlas; the approved photograph is drawn once without stretching.
-  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;
+  const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=1024;
   const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,1024,1024);
+  ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,2048,1024);
   const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;
-  const image=new Image();image.decoding='async';
-  image.onload=()=>{
-    // Fill the entire front face. The 3:2 box restores the photo's aspect ratio.
-    ctx.drawImage(image,0,0,canvas.width,canvas.height);
-    texture.needsUpdate=true;mesh.userData.imageLoaded=true;
-  };
+  const images=new Map();let selected='';
+  function selectImage(layout){
+    if(selected===layout)return;
+    selected=layout;mesh.userData.imageLoaded=false;
+    const paint=entry=>{
+      if(selected!==layout)return;
+      const fit=Math.min(canvas.width/entry.image.width,canvas.height/entry.image.height);
+      const width=entry.image.width*fit,height=entry.image.height*fit;
+      ctx.fillStyle='#fffaf1';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(entry.image,0,0,width,height);
+      // Match texel density to the physical panel; unused atlas pixels stay off-face.
+      const uv=geometry.attributes.uv;
+      for(let i=16;i<20;i++)uv.setXY(i,frontUV[(i-16)*2]*width/canvas.width,1-height/canvas.height+frontUV[(i-16)*2+1]*height/canvas.height);
+      uv.needsUpdate=true;
+      texture.needsUpdate=true;mesh.userData.imageLoaded=true;
+    };
+    if(images.get(layout)?.loaded){paint(images.get(layout));return;}
+    if(images.has(layout))return;
+    const entry={image:new Image(),loaded:false};images.set(layout,entry);
+    entry.image.decoding='async';entry.image.onload=()=>{entry.loaded=true;paint(entry);};
+    entry.image.src=`./assets/stage/rescene-quiz-${layout==='mobile'?'mobile':'wide'}-v4.webp`;
+  }
   const geometry=new T.BoxGeometry(3,2,.22),uv=geometry.attributes.uv;
   for(let i=0;i<uv.count;i++){
     if(Math.floor(i/4)!==4)uv.setXY(i,.002,.998);
   }
+  const frontUV=Array.from(uv.array.slice(32,40));
   geometry.clearGroups();
   const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({map:texture}));
   mesh.name='RESCENE member photo backdrop';mesh.position.set(0,4.1,-1.5);
-  mesh.userData={triangles:12,drawCalls:1,textureBytes:1024*1024*4,staticBackdrop:true,imageLoaded:false};
-  image.src='./assets/stage/rescene-quiz-members-v2.webp';
+  mesh.userData={triangles:12,drawCalls:1,textureBytes:2048*1024*4,staticBackdrop:true,imageLoaded:false,selectImage};
   return mesh;
  }
  function layoutBackdrop(mesh,compact){
-  const height=compact?7:6.6;
-  mesh.scale.set(height/2,height/2,1);
-  mesh.position.y=.6+height/2;
+  const width=compact?14.4:26,height=compact?8:26/3;
+  mesh.scale.set(width/3,height/2,1);
+  mesh.position.set(0,compact?3:2.9,compact?-3:-4);
   mesh.userData.layout=compact?'mobile':'desktop';
+  mesh.userData.selectImage(mesh.userData.layout);
  }
  return {create,update,createBackdrop,layoutBackdrop};
 })();
