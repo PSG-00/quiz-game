@@ -213,7 +213,7 @@ function renderQuizBuilder() {
     </div>`;
 }
 function selectQuizStep(index){activeQuizIndex=index;renderQuizBuilder();saveQuizDraft();}
-function addQuizStep(isRevival){rememberQuizEdit();builderQuestions.push(newQuizStep(isRevival));activeQuizIndex=builderQuestions.length-1;commitQuizStructure();document.getElementById('builder-question').focus();}
+function addQuizStep(isRevival){rememberQuizEdit();const nextIndex=activeQuizIndex+1;builderQuestions.splice(nextIndex,0,newQuizStep(isRevival));activeQuizIndex=nextIndex;commitQuizStructure();document.getElementById('builder-question').focus();}
 function removeQuizStep(index){rememberQuizEdit();builderQuestions.splice(index,1);if(!builderQuestions.length)builderQuestions=[newQuizStep()];activeQuizIndex=Math.min(index,builderQuestions.length-1);commitQuizStructure();}
 function duplicateQuizStep(){rememberQuizEdit();builderQuestions.splice(activeQuizIndex+1,0,JSON.parse(JSON.stringify(builderQuestions[activeQuizIndex])));activeQuizIndex++;commitQuizStructure();}
 function moveQuizStep(delta){const next=activeQuizIndex+delta;if(next<0||next>=builderQuestions.length)return;rememberQuizEdit();[builderQuestions[next],builderQuestions[activeQuizIndex]]=[builderQuestions[activeQuizIndex],builderQuestions[next]];activeQuizIndex=next;commitQuizStructure();}
