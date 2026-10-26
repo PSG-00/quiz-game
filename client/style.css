@@ -2295,3 +2295,5 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 
 /* Lift only the input controls above an overlay keyboard; keep the world frozen. */
 #game-hud .bottom-controls-row { bottom:calc(max(18px,env(safe-area-inset-bottom)) + var(--keyboard-inset,0px)); }
+#fps-meter { position:fixed;left:max(12px,env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom));z-index:22;padding:4px 7px;border:1px solid #c4d8cd;border-radius:6px;background:rgba(255,253,247,.92);color:#42665b;font:700 11px/1.2 system-ui,sans-serif;font-variant-numeric:tabular-nums;pointer-events:none; }
+.keyboard-open #fps-meter { display:none; }

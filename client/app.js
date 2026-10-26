@@ -741,6 +741,17 @@ function measurePlayerChat(entity,width,height,badgeWidth,anchorX,badgeTop){
 // ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
 const clock = new THREE.Clock();
 const framePacing=FramePacing.create(144);
+const fpsMeter=document.getElementById('fps-meter');
+let fpsWindowStart=null,fpsFrames=0,fpsRoomId=null;
+function recordRenderedFrame(now){
+  if(fpsRoomId!==currentRoomId){fpsRoomId=currentRoomId;fpsWindowStart=null;fpsFrames=0;fpsMeter.textContent='FPS --';}
+  if(!currentRoomId)return;
+  if(fpsWindowStart===null){fpsWindowStart=now;return;}
+  fpsFrames++;
+  const elapsed=now-fpsWindowStart;
+  if(elapsed>=1000){fpsMeter.textContent=`FPS ${Math.round(fpsFrames*1000/elapsed)}`;fpsFrames=0;fpsWindowStart=now;}
+}
+document.addEventListener('visibilitychange',()=>{fpsWindowStart=null;fpsFrames=0;fpsMeter.textContent='FPS --';});
 const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
 function disposeEntityAvatar(entity){
   if(entity.detailedAvatar){entity.group.remove(entity.detailedAvatar);AvatarActors.dispose(entity.detailedAvatar);}
@@ -982,6 +993,7 @@ function animate(frameTime) {
   InstancedAvatars.flush(camera,renderer.domElement.clientHeight);
   CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
   renderer.render(scene, camera);
+  recordRenderedFrame(frameTime);
 }
 
 requestAnimationFrame(animate);

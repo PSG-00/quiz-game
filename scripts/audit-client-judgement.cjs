@@ -14,6 +14,8 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  await page.waitForFunction(()=>currentRoomId&&roomState?.state==='WAITING');const roomId=await page.evaluate(()=>currentRoomId),hostId=await page.evaluate(()=>myClientId);
  guest=new WebSocket('ws://127.0.0.1:'+port);let guestId;await new Promise((resolve,reject)=>{guest.on('error',reject);guest.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='WELCOME'){guestId=m.clientId;guest.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'다른 참가자',worldDelta:true}));}if(m.type==='JOINED_ROOM')resolve();});});
  await page.waitForFunction(()=>playerEntities.size===2);
+ await page.waitForFunction(()=>/^FPS [1-9]\d*$/.test(document.getElementById('fps-meter').textContent));
+ result.fpsDisplay=await page.locator('#fps-meter').textContent();
  await control('patch',{roomId,players:{[hostId]:{x:0,z:0},[guestId]:{x:0,z:0}}});await page.evaluate(()=>{myPos={x:0,z:0};myMoveTarget=null;});await sleep(800);
  guest.send(JSON.stringify({type:'CHAT',text:'이동 중 말풍선 표시 확인'}));
  await page.waitForFunction(id=>!!playerEntities.get(id)?.chatBubbleText,guestId);
