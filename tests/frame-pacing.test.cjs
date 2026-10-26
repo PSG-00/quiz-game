@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),FramePacing=require('../client/framePacing');
-test('60·90·120·144Hz에서 모바일 60 제한 없이 화면 주사율대로 렌더링',()=>{
- for(const hz of [60,90,120,144]){
+test('60·75·90·120·144Hz에서 모바일 60 제한 없이 화면 주사율대로 렌더링',()=>{
+ for(const hz of [60,75,90,120,144]){
   const pacing=FramePacing.create(144);let rendered=0;
   for(let i=0;i<hz*10;i++)if(pacing.accept(i*1000/hz))rendered++;
   assert.equal(rendered,hz*10,`${hz}Hz`);

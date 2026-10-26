@@ -218,6 +218,11 @@ const crown = new THREE.Sprite(new THREE.SpriteMaterial({map: crownTex, transpar
 crown.position.set(0,1.3,1.18);crown.scale.set(.9,.9,1);podiumGroup.add(crown);
 const hostSpeechBubble=document.getElementById('host-speech-bubble');
 const hostSpeechAnchor=new THREE.Vector3();
+const hostSpeechSize={width:0,height:0};
+new ResizeObserver(()=>{
+  hostSpeechSize.width=hostSpeechBubble.offsetWidth;
+  hostSpeechSize.height=hostSpeechBubble.offsetHeight;
+}).observe(hostSpeechBubble);
 
 // (4) 무대 바닥 구역 플랫폼 생성 함수
 function createStageZone(width, depth, colorHex, symbol, symbolColor, x, z) {
@@ -982,7 +987,7 @@ function animate(frameTime) {
     hostSpeechAnchor.set(0,4.25,-.3).applyMatrix4(podiumGroup.matrixWorld).project(camera);
     hostSpeechBubble.style.visibility=Math.abs(hostSpeechAnchor.x)<.96&&Math.abs(hostSpeechAnchor.y)<1?'visible':'hidden';
     const anchorX=(hostSpeechAnchor.x+1)*viewWidth/2,anchorY=(1-hostSpeechAnchor.y)*viewHeight/2;
-    const width=hostSpeechBubble.offsetWidth,height=hostSpeechBubble.offsetHeight;
+    const width=hostSpeechSize.width||hostSpeechBubble.offsetWidth,height=hostSpeechSize.height||hostSpeechBubble.offsetHeight;
     const left=Math.max(8,Math.min(viewWidth-width-8,anchorX-width/2));
     const top=Math.max(4,anchorY-height-10);
     hostSpeechBubble.style.transform=`translate3d(${left}px,${top}px,0)`;
@@ -990,7 +995,7 @@ function animate(frameTime) {
   }
   updateTimerDisplay();
   MobileCrowd.flush();
-  InstancedAvatars.flush(camera,renderer.domElement.clientHeight);
+  InstancedAvatars.flush(camera,viewHeight);
   CrowdDecorations.flush(playerEntities.values(),myClientId,camera);
   renderer.render(scene, camera);
   recordRenderedFrame(frameTime);
