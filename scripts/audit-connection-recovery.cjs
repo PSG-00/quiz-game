@@ -1,0 +1,41 @@
+// 45 isolated connections, packet loss, frozen rendering, reconnect and lost timers.
+const fs=require('node:fs'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{fork}=require('node:child_process'),W=require('ws');
+const {chromium}=require('C:/Users/psg00/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const port=3147,base=`http://127.0.0.1:${port}`,pending=new Map(),clients=[],sleep=ms=>new Promise(r=>setTimeout(r,ms));let child,browser,serial=0;
+async function until(fn,timeout=15000){const end=Date.now()+timeout;while(Date.now()<end){const v=await fn();if(v)return v;await sleep(30);}throw Error('Recovery audit timeout');}
+function control(command,data={}){return new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});child.send({id,command,...data});});}
+async function connect(roomId,{token=crypto.randomBytes(32).toString('hex'),session=null}={}){
+ const c={socket:new W(`ws://127.0.0.1:${port}`),messages:[],token,id:null,session:null};clients.push(c);
+ c.socket.on('error',()=>{});c.socket.on('message',raw=>{const m=JSON.parse(raw);c.messages.push(m);if(m.type==='WELCOME'){c.socket.send(JSON.stringify({type:'AUTH_LIBRARY',token}));c.socket.send(JSON.stringify(session?{type:'RESUME_ROOM',...session,worldDelta:true}:{type:'JOIN_ROOM',roomId,nickname:'재접속 검증',worldDelta:true}));}if(m.type==='JOINED_ROOM'){c.id=m.clientId;c.session={roomId:m.roomId,resumeToken:m.resumeToken};}});
+ await until(()=>c.id||c.messages.find(m=>m.type==='ERROR'||m.type==='RESUME_REJECTED'));return c;
+}
+(async()=>{const result={};try{
+ child=fork('scripts/lib/auditServer.cjs',[],{env:{...process.env,PORT:String(port),OX_DISABLE_PERSISTENCE:'1',OX_PUBLIC_TEST_BOTS:'0',NODE_ENV:'development'},silent:true});child.stdout.resume();child.stderr.resume();child.on('message',m=>{const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.result);}});
+ await until(async()=>{try{return(await fetch(base)).ok;}catch{}});browser=await chromium.launch({headless:true,channel:'chrome'});
+ const pc=await browser.newPage({viewport:{width:1280,height:800},serviceWorkers:'block'}),phone=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'}),errors=[];
+ for(const p of [pc,phone]){p.on('pageerror',e=>errors.push(e.message));await p.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await p.goto(base);await p.waitForFunction(()=>libraryReady);}
+ await pc.evaluate(()=>ws.send(JSON.stringify({type:'CREATE_ROOM',nickname:'PC',title:'45명 복구 검증',targetWinners:1,restSeconds:1,worldDelta:true,questions:[{type:'SHORT',question:'첫 문제',answer:'서울',timeLimit:60},{type:'SHORT',question:'다음 문제',answer:'서울',timeLimit:60}]})));await pc.waitForFunction(()=>currentRoomId);const roomId=await pc.evaluate(()=>currentRoomId);
+ await phone.evaluate(id=>joinRoom(id),roomId);await phone.waitForFunction(()=>currentRoomId);const phoneId=await phone.evaluate(()=>myClientId),phoneToken=await phone.evaluate(()=>libraryToken);
+ const guests=await Promise.all(Array.from({length:43},()=>connect(roomId)));assert.equal((await control('snapshot',{roomId})).players.length,45);result.connections=45;
+ await control('question',{roomId,index:0,duration:60000,question:{type:'SHORT',question:'첫 문제',answer:'서울',timeLimit:60}});await phone.waitForFunction(()=>roomState?.state==='QUESTION');
+ // Pause rAF and lose only the transition packet; networking must recover independently.
+ await phone.evaluate(()=>{window.auditRAF=requestAnimationFrame;window.auditMessage=ws.onmessage;window.auditDropped=false;ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='ROOM_STATE'&&m.state==='QUESTION'&&m.currentQuestion.index===1&&!auditDropped){auditDropped=true;return;}auditMessage(e);};});
+ await control('break',{roomId});await phone.waitForFunction(()=>roomState.state==='BREAK');await phone.evaluate(()=>{window.requestAnimationFrame=()=>0;});
+ await pc.waitForFunction(()=>roomState.state==='QUESTION'&&roomState.currentQuestion.index===1);await phone.waitForFunction(()=>roomState.state==='QUESTION'&&document.getElementById('q-main-text').textContent==='다음 문제',{}, {timeout:7000});result.frozenRenderRecovery=true;
+ await phone.evaluate(()=>{window.requestAnimationFrame=auditRAF;ws.onmessage=auditMessage;requestAnimationFrame(animate);document.getElementById('short-answer-input').value='서울';submitShortAnswer();});await phone.waitForFunction(()=>playerEntities.get(myClientId)?.hasSubmitted);
+ // A dead-looking socket is replaced by the visible button, preserving seat and answer.
+ await phone.evaluate(()=>{window.auditOldSocket=ws;window.auditOldClose=ws.onclose;ws.onmessage=()=>{};});await phone.locator('#btn-recover-connection').click();await phone.waitForFunction(id=>ws!==auditOldSocket&&myClientId===id&&roomState?.state==='QUESTION'&&libraryReady,phoneId);
+ assert.equal(await phone.locator('#short-answer-input').inputValue(),'서울');await phone.evaluate(()=>auditOldClose({code:1006}));await sleep(300);assert.equal(await phone.evaluate(()=>currentRoomId),roomId);result.manualPreservesSeatAndAnswer=true;result.oldCloseIgnored=true;
+ // Automatic heartbeat recovery when an OPEN socket no longer yields application messages.
+ await phone.evaluate(()=>{window.auditBlackholeSocket=ws;ws.onmessage=()=>{};lastPacketAt=Date.now()-13000;});await phone.waitForFunction(id=>ws!==auditBlackholeSocket&&myClientId===id&&roomState?.state==='QUESTION'&&libraryReady,phoneId);result.halfOpenAutoRecovery=true;
+ // A second tab takes over the same participant; the old tab must not reconnect-loop.
+ const takeover=await connect(roomId,{token:phoneToken});assert.equal(takeover.id,phoneId);await phone.waitForFunction(()=>connectionPaused&&!currentRoomId);await sleep(2500);assert.equal(takeover.socket.readyState,1);assert.equal((await control('snapshot',{roomId})).players.length,45);
+ await phone.locator('#btn-lobby-recover').click();await phone.waitForFunction(()=>libraryReady&&ws.readyState===WebSocket.OPEN);await phone.evaluate(id=>joinRoom(id),roomId);await phone.waitForFunction(id=>currentRoomId&&myClientId===id,phoneId);assert.equal((await control('snapshot',{roomId})).players.find(p=>p.id===phoneId).eligible,true);result.noDuplicateTabReconnectLoop=true;
+ // Throw away the only expiry timer: the periodic sweep still releases the seat.
+ const departed=guests[0];departed.socket.terminate();await until(async()=>!(await control('snapshot',{roomId})).players.find(p=>p.id===departed.id)?.connected);await control('lose-expiry-timer',{roomId,playerId:departed.id});await until(async()=>!(await control('snapshot',{roomId})).players.some(p=>p.id===departed.id),4000);
+ const late=await connect(roomId,{token:departed.token});assert.ok(late.id&&late.id!==departed.id);assert.equal((await control('snapshot',{roomId})).players.find(p=>p.id===late.id).eligible,false);result.lostExpiryClearedAndLateEntrySpectates=true;
+ // 42 peers reconnect at once, reusing their own seats, participant IDs and roles.
+ const replacements=await Promise.all(guests.slice(1).map(async c=>{c.socket.terminate();const next=await connect(roomId,{token:c.token,session:c.session});assert.equal(next.id,c.id);return next;}));assert.equal(replacements.length,42);
+ const final=await control('snapshot',{roomId});assert.equal(final.players.length,45);assert.equal(final.players.filter(p=>p.connected===false).length,0);assert.equal(final.players.find(p=>p.id===phoneId).answer,'서울');result.concurrentReconnects=42;
+ await phone.screenshot({path:'artifacts/recovery-mobile.png'});await pc.screenshot({path:'artifacts/recovery-pc.png'});assert.deepEqual(errors,[]);result.errors=errors;result.status='PASS';fs.writeFileSync('artifacts/connection-recovery.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+ }finally{for(const c of clients)c.socket.terminate();await browser?.close();child?.kill();}})().catch(e=>{console.error(e);process.exitCode=1});

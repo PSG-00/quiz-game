@@ -15,11 +15,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
-  <link rel="stylesheet" href="./style.css?v=40" />
+  <link rel="stylesheet" href="./style.css?v=41" />
   <link rel="stylesheet" href="./spectator.css?v=2" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+  <div id="connection-notice" role="status" aria-live="polite" hidden></div>
   <!-- 3D / 2.5D 파스텔 스튜디오 캔버스 -->
   <div id="canvas-container"><div id="host-speech-bubble" class="host-speech-bubble" role="status" aria-label="사회자 안내">준비되면 게임을 시작해 주세요!</div><div id="race-feedback" role="status" hidden></div></div>
 
@@ -92,6 +93,7 @@
           <label for="nickname-input">내 닉네임</label>
           <input type="text" id="nickname-input" maxlength="12" placeholder="닉네임 입력" autocomplete="off" />
           <button id="btn-avatar-picker" type="button" onclick="AvatarPicker.open()"><span id="selected-avatar-name">원이</span> · 아바타 선택</button>
+          <button id="btn-lobby-recover" type="button" onclick="recoverConnection()">↻ 연결 복구</button>
         </div>
       </div>
 
@@ -212,6 +214,7 @@
         <button id="btn-show-results" class="hidden" onclick="showWinnerModal(roomState)">결과 보기</button>
         <button id="btn-reset-game" onclick="resetGame()">↻ 새 게임</button>
         <div class="quiz-action-tools">
+          <button id="btn-recover-connection" type="button" onclick="recoverConnection()" title="연결을 새로 열고 최신 상태로 복구">↻ 연결 복구</button>
           <button id="btn-low-spec" type="button" onclick="toggleLowSpecMode()" aria-pressed="false">저사양 모드</button>
           <button class="rules-link" onclick="document.getElementById('rules-dialog').showModal()">게임 규칙</button>
           <button id="btn-fullscreen" type="button" onclick="toggleFullScreen()" title="전체화면 전환">⛶ 전체화면</button>
@@ -429,11 +432,11 @@
 <script src="./sceneClarity.js?v=3"></script>
   <script src="./crowdDecorations.js?v=2"></script>
   <script src="./showHost.js?v=7"></script>
-  <script src="./worldUpdates.js?v=1"></script>
+  <script src="./worldUpdates.js?v=2"></script>
   <script src="./roomStateSync.js?v=1"></script>
   <script src="./arenaRules.js?v=1"></script>
   <script src="./spectatorView.js?v=1"></script>
-  <script src="./app.js?v=77"></script>
+  <script src="./app.js?v=78"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

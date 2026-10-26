@@ -2308,5 +2308,7 @@ body:not(.answer-mode) .chat-sound-row { opacity:1; }
 .builder-type-tabs { flex-wrap:wrap; }
 #race-feedback { position:absolute;top:8px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);padding:7px 12px;box-sizing:border-box;border-radius:12px;background:rgba(255,253,246,.94);border:1px solid #ddcfb7;color:#52645f;font-size:12px;font-weight:700;text-align:center;z-index:9;pointer-events:none; }
 #race-feedback[hidden] { display:none; }
+#connection-notice { position:fixed;z-index:200;left:50%;bottom:calc(105px + env(safe-area-inset-bottom));transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 14px;border:1px solid #d2bfa5;border-radius:12px;background:#fff9ee;color:#665347;font-size:13px;font-weight:700;box-shadow:0 3px 16px #45352420;pointer-events:none;text-align:center; }
+#connection-notice[hidden] { display:none; }
 .race-mode #question-board .banner-question-text { max-height:none; }
 @media(max-width:480px){.race-question-row { grid-template-columns:minmax(0,1fr); }.race-question-row .builder-ox { justify-content:flex-start; }}

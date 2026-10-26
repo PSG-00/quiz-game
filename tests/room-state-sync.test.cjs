@@ -29,3 +29,9 @@ test('현재 상태 재전송은 요청자에게만 보내며 단계·마감·�
  assert.equal(other.messages.length,count);assert.equal(room.stateEndTime,end);assert.equal(room.state,'QUESTION');
  room.state='BREAK';assert.equal(room.getStateVersion(),version+1);
 });
+
+test('강제 복구는 요청자에게 최신 단계와 전체 월드를 함께 보내며 다른 사용자에게 방송하지 않음',()=>{
+ const room=new Room({},'a'),first={readyState:1,worldDeltaEnabled:true,messages:[],send(raw){this.messages.push(JSON.parse(raw));}},second={...first,messages:[]};room.addPlayer('a','A',first);room.addPlayer('b','B',second);room.broadcastWorldTick();first.messages=[];second.messages=[];room.players.get('a').x=3;room.sendCurrentState(first);
+ assert.deepEqual(first.messages.map(m=>m.type),['ROOM_STATE','WORLD_TICK']);assert.equal(first.messages[1].p.find(p=>p.i==='a').x,3);assert.equal(second.messages.length,0);
+ const seq=first.messages[1].seq;room.broadcastWorldTick();assert.ok(first.messages.at(-1).seq>seq);
+});

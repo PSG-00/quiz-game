@@ -9,6 +9,9 @@ process.on('message',message=>{try{
  const room=manager?.getRoom(message.roomId);let result;
  if(message.command==='rooms')result=manager?[...manager.rooms.values()].map(view):[];
  else if(message.command==='snapshot')result=view(room);
+ else if(message.command==='lose-expiry-timer'){
+  const p=room.players.get(message.playerId);if(p.disconnectTimer)clearTimeout(p.disconnectTimer);p.disconnectedUntil=Date.now()-1;result=view(room);
+ }
  else if(message.command==='profile-room'){
   const controller=require('../../server/PublicTestRoom').enablePublicTestRoom(manager);
   controller.room.addPlayer('profile-extra','부하봇049',null,'woni');

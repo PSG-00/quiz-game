@@ -43,3 +43,9 @@ test('초기 상태 없는 델타·다른 방·오래된 패킷은 무시, 로�
  state.reset();assert.equal(state.apply({type:'WORLD_DELTA',roomId:'r',seq:4,p:[]}),null);
  assert.equal(state.apply({type:'WORLD_TICK',p:[player('old-server')]}).length,1);
 });
+
+test('모르는 캐릭터의 부분 패킷은 불완전한 모델을 만들지 않고 전체 상태를 요청',()=>{
+ const state=create();state.apply({type:'WORLD_TICK',roomId:'r',seq:1,p:[player('a')]});assert.equal(state.needsSnapshot(),false);
+ assert.equal(state.apply({type:'WORLD_DELTA',roomId:'r',seq:2,p:[{i:'b',x:3}]}),null);assert.equal(state.needsSnapshot(),true);
+ const restored=state.apply({type:'WORLD_TICK',roomId:'r',seq:3,p:[player('a'),player('b',3)]});assert.equal(restored.length,2);assert.equal(restored[1].x,3);assert.equal(state.needsSnapshot(),false);
+});

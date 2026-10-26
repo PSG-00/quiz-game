@@ -61,6 +61,22 @@ test('시작 전 마지막 사용자 단절은 방을 즉시 정리',()=>{
  r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms());assert.equal(manager.getRoom(r.id),undefined);manager.close();
 });
 
+test('만료 직전 타이머가 실행돼도 다시 예약하고, 타이머가 유실되면 주기 점검이 자리 정리',()=>{
+ const manager=new RoomManager({startLoop:false}),r=manager.createRoom({},'a');r.addPlayer('a','A');r.startGame();clearTimeout(r.timerHandle);
+ r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms(),1000);const original=r.players.get('a').disconnectTimer;clearTimeout(original);
+ assert.equal(r.expirePlayer('a',30999),false);assert.notEqual(r.players.get('a').disconnectTimer,original);
+ clearTimeout(r.players.get('a').disconnectTimer);manager.sweepExpired(31000);assert.equal(manager.getRoom(r.id),undefined);manager.close();
+});
+
+test('대기실로 초기화하면 끊긴 연결의 예약은 즉시 해제',t=>{
+ const r=room(t);open(r);r.disconnectPlayer('a');r.resetToWaiting();assert.equal(r.players.has('a'),false);assert.equal(r.players.size,1);assert.equal(r.hostId,'b');
+});
+
+test('쉬는 시간 전환 타이머가 유실돼도 마감 후 점검이 다음 문제를 한 번만 시작',()=>{
+ const manager=new RoomManager({startLoop:false}),r=manager.createRoom({questions:[{type:'OX',question:'첫째',answer:'O',timeLimit:15},{type:'OX',question:'다음',answer:'X',timeLimit:15}]},'a');r.addPlayer('a','A');r.gameId='g';r.currentQuestionIndex=0;r.state='BREAK';r.stateEndTime=1000;
+ manager.sweepExpired(2999);assert.equal(r.state,'BREAK');manager.sweepExpired(3000);assert.equal(r.state,'QUESTION');assert.equal(r.currentQuestionIndex,1);manager.sweepExpired(3001);assert.equal(r.currentQuestionIndex,1);manager.close();
+});
+
 test('명시적 퇴장은 예약 없이 즉시 자격 제거, 새 게임에서는 접속한 관전자도 참가',t=>{
  const r=room(t);open(r);r.removePlayer('a');const p=r.addPlayer('new-a','재입장');assert.equal(p.eligible,false);
  r.resetToWaiting();assert.equal(p.eligible,true);r.startGame();clearTimeout(r.timerHandle);assert.equal(p.alive,true);

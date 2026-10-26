@@ -124,6 +124,8 @@ wss.on('connection',ws=>{
  function leave(preserve=false){
   if(!currentRoom)return;
   const room=currentRoom;currentRoom=null;
+  // A delayed close/error from an old socket cannot detach its replacement.
+  if(room.players.get(clientId)?.ws!==ws)return;
   if(preserve)room.disconnectPlayer(clientId,()=>{roomManager.cleanupEmptyRooms();if(roomManager.getRoom(room.id))room.broadcastRoomEvent();publishRooms();});
   else room.removePlayer(clientId);
   if(room.players.size)room.broadcastRoomEvent();
@@ -133,9 +135,20 @@ wss.on('connection',ws=>{
  function joined(player,token,resumed=false){
   send(ws,{type:'JOINED_ROOM',roomId:currentRoom.id,clientId:player.id,resumeToken:token,resumed,ownAnswer:player.submittedText,hasSubmitted:player.hasSubmitted,gameId:currentRoom.gameId,roundId:currentRoom.roundId});
  }
- function issueSession(player){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token);}
+ function issueSession(player,resumed=false){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token,resumed);}
+ function restorePlayer(room,player,{resumeToken=null,worldDelta=true}={}){
+  if(player.connected===false&&Date.now()>=player.disconnectedUntil){room.expirePlayer(player.id);return false;}
+  if(currentRoom&&currentRoom!==room)leave();
+  const oldWs=player.ws;
+  if(oldWs&&oldWs!==ws){oldWs.detachRoom?.();oldWs.close(4001,'다른 탭에서 복귀했습니다.');}
+  if(!room.resumePlayer(player,ws))return false;
+  currentRoom=room;clientId=player.id;ws.worldDeltaEnabled=worldDelta;ws.worldSnapshotRoom=null;
+  if(resumeToken)joined(player,resumeToken,true);else issueSession(player,true);
+  console.info('SESSION_RESTORED',JSON.stringify({roomId:room.id,clientId:player.id}));
+  room.sendCurrentState(ws);room.broadcastRoomEvent();room.broadcastWorldTick();publishRooms();return true;
+ }
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
- send(ws,{type:'WELCOME',clientId,features:{quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
+ send(ws,{type:'WELCOME',clientId,features:{liveSync:true,quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',async raw=>{
   if(!limits.allow('all',60,120))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -144,6 +157,7 @@ wss.on('connection',ws=>{
   }
   try{
    if(currentRoom&&roomManager.getRoom(currentRoom.id)!==currentRoom)currentRoom=null;
+   if(['JOIN_ROOM','RESUME_ROOM','GET_ROOMS'].includes(msg.type))roomManager.sweepExpired();
    if(msg.type==='MOVE'&&!limits.allow('move',30,10))return;
    if(msg.type==='ANSWER_EDITING'&&!limits.allow('editing',5,10))return;
    if(['SUBMIT_SHORT','SUBMIT_MULTIPLE'].includes(msg.type)&&!limits.allow('answer',5,10))return;
@@ -185,8 +199,12 @@ wss.on('connection',ws=>{
      checkCodeLimit(ws._socket.remoteAddress);
      send(ws,{type:'QUIZ_LOADED',quiz:library.getByCode(msg.code,ownerHash),byCode:true,requestId:msg.requestId});break;
     case 'GET_ROOMS':send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
+    case 'APP_PING':
+     if(limits.allow('ping',1,2))send(ws,{type:'APP_PONG',serverNow:Date.now(),roomId:currentRoom?.id||null,stateVersion:currentRoom?.getStateVersion()});break;
     case 'GET_ROOM_STATE':
-     if(currentRoom&&msg.roomId===currentRoom.id&&limits.allow('stateSync',1,2))currentRoom.broadcastRoomEvent({},ws);
+     if(!limits.allow('stateSync',1,2))break;
+     if(currentRoom&&msg.roomId===currentRoom.id)currentRoom.sendCurrentState(ws);
+     else send(ws,{type:'ROOM_SESSION_MISSING',roomId:msg.roomId});
      break;
     case 'RESUME_ROOM':{
      if(currentRoom)break;
@@ -195,12 +213,7 @@ wss.on('connection',ws=>{
      if(!ownerHash||!player||player.connected===false&&Date.now()>=player.disconnectedUntil){
       send(ws,{type:'RESUME_REJECTED',roomId:msg.roomId,roomExists:!!room});break;
      }
-     if(currentRoom&&currentRoom!==room)leave();
-     const oldWs=player.ws;
-     if(oldWs&&oldWs!==ws){oldWs.detachRoom?.();oldWs.close(4001,'다른 탭에서 복귀했습니다.');}
-     currentRoom=room;clientId=player.id;room.resumePlayer(player,ws);
-     ws.worldDeltaEnabled=msg.worldDelta===true;ws.worldSnapshotRoom=null;
-     joined(player,msg.resumeToken,true);room.broadcastRoomEvent();room.broadcastWorldTick();publishRooms();break;
+     if(!restorePlayer(room,player,{resumeToken:msg.resumeToken,worldDelta:msg.worldDelta===true}))send(ws,{type:'RESUME_REJECTED',roomId:msg.roomId,roomExists:!!roomManager.getRoom(msg.roomId)});break;
     }
     case 'CREATE_ROOM': {
      if(!ownerHash)throw new Error('퀴즈 보관함 연결을 기다려 주세요.');
@@ -216,6 +229,10 @@ wss.on('connection',ws=>{
     }
     case 'JOIN_ROOM': {
      const room=roomManager.getRoom(msg.roomId);if(!room)throw new Error('이미 종료된 방입니다.');
+     const ownPlayer=ownerHash&&[...room.players.values()].find(p=>p.ownerHash===ownerHash);
+     // Explicit re-entry by the same browser restores its existing seat/role,
+     // including when sessionStorage was lost. Never create a second reservation.
+     if(ownPlayer&&restorePlayer(room,ownPlayer,{worldDelta:msg.worldDelta===true}))break;
      const capacity=room.maxPlayers;
      const replacing=ownerHash?[...room.players.values()].filter(p=>p.id!==clientId&&p.ownerHash===ownerHash).length:0;
      // Reject before touching another tab, its room or host. A same-room
@@ -246,7 +263,7 @@ wss.on('connection',ws=>{
    }
   }catch(error){console.error('퀴즈/방 처리 실패:',error.message);send(ws,{type:'ERROR',code:error.code,message:error.message||'처리하지 못했어요. 다시 시도해 주세요.',requestId:msg.requestId});}
  });
- ws.on('close',()=>leave(true));
+ ws.on('close',code=>{const roomId=currentRoom?.id;leave(true);if(roomId)console.info('CONNECTION_CLOSED',JSON.stringify({roomId,clientId,code}));});
  ws.on('error',()=>leave(true));
 });
 if(process.env.OX_PUBLIC_TEST_BOTS==='48'){

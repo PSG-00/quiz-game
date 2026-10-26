@@ -1,6 +1,10 @@
 // One room diff per tick, shared by capable clients. Older clients retain snapshots.
 class WorldStream {
   constructor(){this.previous=new Map();this.sequence=0;this.lastSnapshotAt=0;}
+  snapshot(roomId,players,ws,stateVersion){
+    if(!ws||ws.readyState!==1||ws.bufferedAmount>256*1024)return false;
+    ws.send(JSON.stringify({type:'WORLD_TICK',roomId,seq:++this.sequence,stateVersion,p:players}));ws.worldSnapshotRoom=roomId;return true;
+  }
   publish(roomId,players,connections,now=Date.now(),stateVersion){
     const phaseChanged=stateVersion!==this.stateVersion;this.stateVersion=stateVersion;
     const current=new Map(),changed=[],removed=[];

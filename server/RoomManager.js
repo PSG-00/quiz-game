@@ -204,8 +204,13 @@ class Room {
 
   expirePlayer(id,now=Date.now()){
     const p=this.players.get(id);
-    if(!p||p.connected!==false||now<p.disconnectedUntil)return false;
-    const callback=p.onDisconnectExpire;this.removePlayer(id);callback?.();return true;
+    if(!p||p.connected!==false)return false;
+    if(Number.isFinite(p.disconnectedUntil)&&now<p.disconnectedUntil){
+      // Wall-clock changes/early timers must not strand a reservation forever.
+      if(p.disconnectTimer)clearTimeout(p.disconnectTimer);
+      p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),Math.max(1,p.disconnectedUntil-now));p.disconnectTimer.unref?.();return false;
+    }
+    const callback=p.onDisconnectExpire;this.removePlayer(id);console.info('SESSION_EXPIRED',JSON.stringify({roomId:this.id,clientId:id}));callback?.();return true;
   }
 
   resumePlayer(p,ws,now=Date.now()){
@@ -566,7 +571,8 @@ class Room {
     this.hostSpeech = '원하는 쪽으로 이동해 주세요! 곧 새 게임이 시작됩니다!';
     this.lastNotice = '목표 이하면 즉시 종료 · 남은 생존자 전원 당첨';
 
-    for (const p of this.players.values()) {
+    for (const p of [...this.players.values()]) {
+      if(p.connected===false){this.removePlayer(p.id);continue;}
       p.eligible=p.connected!==false;
       p.alive = p.eligible;
       p.submittedText = '';
@@ -681,7 +687,7 @@ class Room {
     if(q?.type==='RACE'&&this.race){for(const p of this.players.values())if(!recipient||p.ws===recipient)this.race.send(p);}
   }
 
-  broadcastWorldTick() {
+  getWorldPlayers() {
     const q = this.getCurrentQuestion();
     const revealText = this.state === 'JUDGE' || this.state === 'ENDED';
     const qType = q ? q.type : 'OX';
@@ -710,7 +716,17 @@ class Room {
       });
     }
 
-    this.worldStream.publish(this.id,playersCompact,[...this.players.values()].map(p=>p.ws),Date.now(),this.getStateVersion());
+    return playersCompact;
+  }
+
+  sendCurrentState(ws){
+    if(ws?.readyState!==1)return;
+    this.broadcastRoomEvent({},ws);
+    this.worldStream.snapshot(this.id,this.getWorldPlayers(),ws,this.getStateVersion());
+  }
+
+  broadcastWorldTick() {
+    this.worldStream.publish(this.id,this.getWorldPlayers(),[...this.players.values()].map(p=>p.ws),Date.now(),this.getStateVersion());
   }
 
   sendToAll(jsonStr) {
@@ -726,6 +742,7 @@ class RoomManager {
   constructor({startLoop=true}={}) {
     this.rooms=new Map();
     this.worldInterval=startLoop?setInterval(()=>{for(const room of this.rooms.values())if(room.players.size)room.broadcastWorldTick();},66):null;
+    this.maintenanceInterval=startLoop?setInterval(()=>this.sweepExpired(),1000):null;
   }
   createRoom(options,hostId){const room=new Room(options,hostId);this.rooms.set(room.id,room);return room;}
   getRoom(id){return this.rooms.get(id);}
@@ -737,6 +754,14 @@ class RoomManager {
     room.players.clear();this.rooms.delete(room.id);
   }
   cleanupEmptyRooms(){for(const room of this.rooms.values())if(!room.players.size)this.closeRoom(room);}
-  close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);for(const room of this.rooms.values()){if(room.timerHandle)clearTimeout(room.timerHandle);for(const p of room.players.values())if(p.disconnectTimer)clearTimeout(p.disconnectTimer);}}
+  sweepExpired(now=Date.now()){
+    if(this.sweeping)return;this.sweeping=true;
+    try{for(const room of [...this.rooms.values()]){
+      for(const p of [...room.players.values()])if(p.connected===false&&(!Number.isFinite(p.disconnectedUntil)||p.disconnectedUntil<=now))room.expirePlayer(p.id,now);
+      if(this.rooms.has(room.id)&&room.state==='BREAK'&&room.stateEndTime>0&&now>=room.stateEndTime+2000)room.nextQuestion({skipPreparation:true});
+    }this.cleanupEmptyRooms();}
+    finally{this.sweeping=false;}
+  }
+  close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);if(this.maintenanceInterval)clearInterval(this.maintenanceInterval);for(const room of this.rooms.values()){if(room.timerHandle)clearTimeout(room.timerHandle);for(const p of room.players.values())if(p.disconnectTimer)clearTimeout(p.disconnectTimer);}}
 }
 module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS};
