@@ -1,7 +1,7 @@
 /* Build index-only LODs: original UVs, normals and skin weights are untouched. */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {MeshoptSimplifier:S}=require('meshoptimizer');
-const assets=['woni-sd-v3-walk','liv-sd-v7-walk','minami-pink-sd-v2-walk','may-sd-v2-walk','may-school-sd-v2-walk','zena-sd-v2-walk'];
+const assets=process.argv.length>2?process.argv.slice(2):['woni-sd-v3-walk','liv-sd-v7-walk','minami-pink-sd-v2-walk','may-sd-v2-walk','may-school-sd-v2-walk','zena-sd-v2-walk'];
 (async()=>{await S.ready;const report=[];
 for(const name of assets){
  const file=path.join('client/assets/models',name+'.glb'),bytes=fs.readFileSync(file);let json,bin;
@@ -14,8 +14,9 @@ for(const name of assets){
   const stride=skin?16:5,attrs=new Float32Array(n*stride),weights=[.3,.3,.3,1,1,...(skin?Array(11).fill(.7):[])];
   for(let i=0;i<n;i++){attrs.set(norm.subarray(i*3,i*3+3),i*stride);attrs.set(uv.subarray(i*2,i*2+2),i*stride+3);if(skin)for(let k=0;k<4;k++)attrs[i*stride+5+joints[i*4+k]]+=skin[i*4+k];}
   const entry={mesh:mi,primitive:pi,original:indices.length/3,levels:[]};
-  for(const [ratio,error] of [[.35,.012],[.12,.035]]){
-   const [out,actualError]=S.simplifyWithAttributes(indices,pos,3,attrs,stride,weights,null,Math.max(12,Math.floor(indices.length*ratio/3)*3),error,['RegularizeLight']);
+  const compact=name.endsWith('-compact-v1'),profiles=compact?[[.45,.004],[.24,.008]]:[[.35,.012],[.12,.035]];
+  for(const [ratio,error] of profiles){
+   const [out,actualError]=S.simplifyWithAttributes(indices,pos,3,attrs,stride,weights,null,Math.max(12,Math.floor(indices.length*ratio/3)*3),error,compact?['RegularizeLight','PreserveFolds']:['RegularizeLight']);
    const buffer=Buffer.from(out.buffer,out.byteOffset,out.byteLength);entry.levels.push({offset,count:out.length,error:actualError});chunks.push(buffer);offset+=buffer.length;
   }entries.push(entry);
  }

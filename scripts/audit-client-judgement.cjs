@@ -2,14 +2,14 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),WebSocket=require('ws'),{fork}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/psg00/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const port=Number(process.env.AUDIT_PORT||3133),base='http://127.0.0.1:'+port,requests=new Map();let child,browser,guest,serial=0;
-const mobile=process.env.AUDIT_MOBILE==='1',suffix=mobile?'-mobile':'',viewport=mobile?{width:390,height:844}:{width:1280,height:800};
+const mobile=process.env.AUDIT_MOBILE==='1',query=process.env.AUDIT_QUERY||'',suffix=(query.includes('compact')?'-compact':'')+(mobile?'-mobile':''),viewport=mobile?{width:390,height:844}:{width:1280,height:800};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(let i=0;i<600;i++){try{const value=await fn();if(value)return value;}catch{}await sleep(20);}throw Error('Audit timeout');}
 function control(command,data={}){return new Promise((resolve,reject)=>{const id=++serial;requests.set(id,{resolve,reject});child.send({id,command,...data});});}
 (async()=>{const result={viewport,device:mobile?'desktop Chromium mobile viewport; not a physical phone':'desktop Chromium'};fs.mkdirSync('artifacts',{recursive:true});try{
  child=fork(path.join(__dirname,'lib/auditServer.cjs'),[],{env:{...process.env,PORT:String(port)},silent:true});child.stdout.resume();child.stderr.resume();child.on('message',m=>{const q=requests.get(m.id);if(q){requests.delete(m.id);m.error?q.reject(Error(m.error)):q.resolve(m.result);}});
  await until(async()=>{try{return(await fetch(base+'/api/rooms')).ok;}catch{return false;}});
  browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport,isMobile:mobile,hasTouch:mobile,deviceScaleFactor:Number(process.env.AUDIT_DPR)||1,serviceWorkers:'block'}),errors=[];
- page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await page.goto(base);await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded),{}, {timeout:120000});
+ page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await page.goto(base+query);await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded),{}, {timeout:120000});
  await page.evaluate(()=>ws.send(JSON.stringify({type:'CREATE_ROOM',title:'판정 격리 점검',nickname:'판정 점검',avatarId:'woni',worldDelta:true,targetWinners:1,questions:[{type:'OX',question:'정답은 O입니다',answer:'O',timeLimit:15}]})));
  await page.waitForFunction(()=>currentRoomId&&roomState?.state==='WAITING');const roomId=await page.evaluate(()=>currentRoomId),hostId=await page.evaluate(()=>myClientId);
  guest=new WebSocket('ws://127.0.0.1:'+port);let guestId;await new Promise((resolve,reject)=>{guest.on('error',reject);guest.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='WELCOME'){guestId=m.clientId;guest.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'다른 참가자',worldDelta:true}));}if(m.type==='JOINED_ROOM')resolve();});});
@@ -46,7 +46,7 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  assert.ok(result.overlayMotion.movementReads<=8,JSON.stringify(result.overlayMotion));
  assert.ok(result.overlayMotion.contentChangeReads>=2&&result.overlayMotion.contentChangeReads<=4,JSON.stringify(result.overlayMotion));
  const renderSettings=await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {shadowMap:renderer.shadowMap.enabled,antialias:renderer.getContext().getContextAttributes().antialias,fxaaLoaded:typeof SceneAntialias!=='undefined',shadowDraws:CrowdDecorations.stats().shadowDraws,pixels:size.x*size.y,pixelRatio:renderer.getPixelRatio()};});
- assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=1728000);
+ assert.equal(renderSettings.shadowMap,false);assert.equal(renderSettings.antialias,false);assert.equal(renderSettings.fxaaLoaded,false);assert.equal(renderSettings.shadowDraws,0);assert.ok(renderSettings.pixels<=(query.includes('quality=crisp')?2073600:1728000));
  assert.equal(await page.evaluate(()=>sceneClarity.stats().mode),'off');assert.equal(await page.evaluate(()=>sceneClarity.stats().targetCount),0);assert.equal(await page.locator('#clarity-toggle').isVisible(),false);
  result.renderSettings=renderSettings;
  await page.waitForFunction(()=>hostBackdrop.userData.imageLoaded);
@@ -66,7 +66,7 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
   assert.equal(await page.evaluate(()=>hostBackdrop.material.map.uuid),backdropTexture);
   result.resizeBudget=[];
   for(const size of [{width:1920,height:1080},{width:2560,height:1440}]){
-   await page.setViewportSize(size);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=1728000);
+   await page.setViewportSize(size);await page.waitForFunction(limit=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth&&renderer.getDrawingBufferSize(new THREE.Vector2()).x*renderer.getDrawingBufferSize(new THREE.Vector2()).y<=limit,query.includes('quality=crisp')?2073600:1728000);
    result.resizeBudget.push(await page.evaluate(()=>{const size=renderer.getDrawingBufferSize(new THREE.Vector2());return {width:innerWidth,height:innerHeight,pixels:size.x*size.y,ratio:renderer.getPixelRatio()};}));
   }
   await page.setViewportSize(viewport);await page.waitForFunction(()=>renderer.getSize(new THREE.Vector2()).x===container.clientWidth);
@@ -104,7 +104,7 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  result.reconnect={status:'PASS',samePlayerId:true,answer:'서울',socketReconnect:true,pageReload:true};
  const spectator=await browser.newPage({viewport,isMobile:mobile,hasTouch:mobile,deviceScaleFactor:Number(process.env.AUDIT_DPR)||1,serviceWorkers:'block'});
  spectator.on('pageerror',e=>errors.push('spectator: '+e.message));
- await spectator.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await spectator.goto(base);await spectator.waitForFunction(()=>libraryReady);
+ await spectator.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await spectator.goto(base+query);await spectator.waitForFunction(()=>libraryReady);
  await spectator.evaluate(rid=>ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:rid,nickname:'늦게 온 관전자',worldDelta:true})),roomId);
  await spectator.waitForFunction(()=>currentRoomId&&playerEntities.get(myClientId)?.eligible===false);
  assert.equal(await spectator.evaluate(()=>canAnswer()),false);await spectator.locator('#spectator-status').waitFor({state:'visible'});

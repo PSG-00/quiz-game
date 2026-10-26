@@ -6,3 +6,11 @@ test('가벼운 선명도 조정은 PC·모바일 모두 기존 대비 픽셀 �
  }
  assert.ok(pixelRatio(390,844,1)>1);assert.ok(pixelRatio(3840,2160,2)<pixelRatio(1280,800,2));
 });
+test('경량 모델 고해상도 옵션만 픽셀 예산을 20% 늘리며 다른 주소는 기존 예산 유지',()=>{
+ const vm=require('node:vm'),fs=require('node:fs'),source=fs.readFileSync('client/renderBudget.js','utf8');
+ function budget(search){const context={window:{},location:{search},URLSearchParams};vm.runInNewContext(source,context);return context.window.RenderBudget;}
+ for(const [w,h,dpr] of [[390,844,3],[1280,800,1],[2560,1440,2]]){
+  const base=budget('').pixelRatio(w,h,dpr),compact=budget('?model=compact').pixelRatio(w,h,dpr),unrelated=budget('?quality=crisp').pixelRatio(w,h,dpr),crisp=budget('?model=compact&quality=crisp').pixelRatio(w,h,dpr);
+  assert.equal(compact,base);assert.equal(unrelated,base);assert.ok(Math.abs(crisp*crisp/(base*base)-1.2)<1e-8);assert.ok(w*h*crisp*crisp<=2073600.01);
+ }
+});

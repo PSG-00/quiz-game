@@ -1,5 +1,8 @@
 /* Actual Blender GLB, loaded once and shared by all Liv instances. */
 function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
+ // Opt-in asset comparison; keep original model URLs and normal rendering intact.
+ const compact=new URLSearchParams(location.search).get('model')==='compact';
+ if(compact){asset=asset.replace(/\.glb$/,'-compact-v1.glb');version+='-compact-v1';}
  let template=null,error=null;
  const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,175,175,175,228,228,228,255,255,255]),4,1,THREE.RGBFormat);
  gradient.minFilter=gradient.magFilter=THREE.NearestFilter;gradient.generateMipmaps=false;gradient.needsUpdate=true;

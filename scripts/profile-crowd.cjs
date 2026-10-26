@@ -8,7 +8,8 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  child=fork(path.join(__dirname,'lib/auditServer.cjs'),[],{env:{...process.env,PORT:String(port)},silent:true});child.stdout.resume();child.stderr.resume();
  child.on('message',m=>{const p=requests.get(m.id);if(p){requests.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.result);}});
  for(let i=0;i<100;i++){try{if((await fetch(base)).ok)break;}catch{}await sleep(100);}
- browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport:{width:1280,height:800},serviceWorkers:'block'});
+ const mobile=process.env.PROFILE_MOBILE==='1';
+ browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1280,height:800},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
  let source=fs.readFileSync(path.join(__dirname,'../client/app.js'),'utf8').replace(/\r\n/g,'\n');
  source="window.profileCrowd={active:false,mode:'current',frames:[],raw:0};\n"+source;
  source=source.replace('  if(!framePacing.accept(frameTime))return;',"  if(profileCrowd.active)profileCrowd.raw++;\n  if(!framePacing.accept(frameTime))return;\n  const profileStart=performance.now();let profileLabels=0;");
@@ -25,7 +26,14 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  await page.waitForFunction(()=>playerEntities.size===50);await sleep(8000);
  const reports=[];
  const clarity=process.env.PROFILE_CLARITY==='1';
- for(const mode of clarity?['off','sharpen','upscale','off','sharpen','upscale']:['unpromoted','optimized','unpromoted','optimized']){
+ const compact=process.env.PROFILE_COMPACT==='1';
+ for(const mode of compact?['original','compact','crisp','original','compact','crisp']:clarity?['off','sharpen','upscale','off','sharpen','upscale']:['unpromoted','optimized','unpromoted','optimized']){
+  if(compact){
+   await page.goto(base+(mode==='original'?'':mode==='compact'?'/?model=compact':'/?model=compact&quality=crisp'));
+   await page.waitForFunction(()=>libraryReady&&ws?.readyState===1);
+   await page.evaluate(id=>{if(currentRoomId!==id)ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:id,nickname:'프로파일',worldDelta:true}));},room.id);
+   await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded)&&playerEntities.size===50,{},{timeout:120000});await sleep(4000);
+  }
   await page.evaluate(mode=>{profileCrowd.mode=mode;profileCrowd.active=false;document.body.classList.toggle('profileBaseline',mode==='unpromoted');if(['off','sharpen','upscale'].includes(mode))sceneClarity.setMode(mode);},mode);await sleep(800);
   await page.evaluate(()=>{profileCrowd.frames=[];profileCrowd.raw=0;profileCrowd.start=performance.now();profileCrowd.active=true;});
   await sleep(3500);
@@ -36,5 +44,5 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
   }));
  }
  for(const report of reports){assert.equal(report.players,50);assert.ok(report.frames>0,'No rendered frames captured');}
- fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync(clarity?'artifacts/clarity-crowd-profile.json':'artifacts/crowd-profile.json',JSON.stringify(reports,null,2));console.log(JSON.stringify(reports,null,2));
+ fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync(compact?`artifacts/compact-crowd-profile${mobile?'-mobile':''}.json`:clarity?'artifacts/clarity-crowd-profile.json':'artifacts/crowd-profile.json',JSON.stringify(reports,null,2));console.log(JSON.stringify(reports,null,2));
 }finally{if(browser)await browser.close();if(child)child.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});
