@@ -333,8 +333,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const hit = {x:rawHit.x/layoutScaleX,z:rawHit.z/layoutScaleZ};
     const pt = onStage ? screenToStage(hit.x, hit.z) : spectatorFromScene(rawHit.x,rawHit.z);
     if(raceActive&&onStage){
-      const dest=pt.z<=-1.4?{x:Math.max(-8.8,Math.min(8.8,pt.x)),z:Math.max(-4.9,Math.min(-1.6,pt.z))}:{x:Math.max(-1.4,Math.min(1.4,pt.x)),z:Math.max(-1.6,Math.min(6,pt.z))};
-      myMoveTarget=(myPos.z>-1.4&&Math.abs(dest.x)>1.65||Math.abs(myPos.x)>1.65&&dest.z>-1.4)?{x:0,z:-3,after:dest}:dest;return;
+      const dest=pt.z<=RaceRules.FRONT_Z?{x:Math.max(-8.8,Math.min(8.8,pt.x)),z:Math.max(RaceRules.MIN_Z+.2,Math.min(RaceRules.FRONT_Z-.2,pt.z))}:{x:Math.max(-1.4,Math.min(1.4,pt.x)),z:Math.max(RaceRules.FRONT_Z-.2,Math.min(6,pt.z))};
+      myMoveTarget=(myPos.z>RaceRules.FRONT_Z&&Math.abs(dest.x)>1.65||Math.abs(myPos.x)>1.65&&dest.z>RaceRules.FRONT_Z)?{x:0,z:RaceRules.JUNCTION_Z,after:dest}:dest;return;
     }
     const minZ = onStage ? STAGE_MIN_Z + .8 : SPECTATOR_MIN_Z;
     const maxZ = onStage ? STAGE_MAX_Z - .8 : SPECTATOR_MAX_Z;
@@ -875,7 +875,7 @@ function animate(frameTime) {
   if (canMove()) {
     const myEntity = playerEntities.get(myClientId);
     const beforeMove={...myPos};
-    const minZ = myEntity && !myEntity.onStage ? SPECTATOR_MIN_Z : STAGE_MIN_Z + .8;
+    const minZ = myEntity && !myEntity.onStage ? SPECTATOR_MIN_Z : raceActive?RaceRules.MIN_Z:STAGE_MIN_Z + .8;
     const maxZ = myEntity && !myEntity.onStage ? SPECTATOR_MAX_Z : STAGE_MAX_Z - .8;
 
     let moveX = 0;

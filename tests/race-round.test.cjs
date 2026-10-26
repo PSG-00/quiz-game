@@ -3,10 +3,10 @@ const {Room}=require('../server/RoomManager'),Rules=require('../client/raceRules
 const questions=[{question:'리센느는 5인조다.',answer:'O'},{question:'1 더하기 1은 3이다.',answer:'X'}];
 function setup(n=4,items=questions,revival=false){const room=new Room({targetWinners:1,questions:[{type:'RACE',question:'OX 레이스',answer:'',raceQuestions:items,timeLimit:120,isRevival:revival}]},'p0');for(let i=0;i<n;i++)room.addPlayer('p'+i,'참가자'+i);return room;}
 function begin(room){room.gameId='race-test';room.nextQuestion({skipPreparation:true});clearTimeout(room.timerHandle);}
-function gate(room,id,answer,now=Date.now()+1000){room.movePlayer(id,0,-3,{now:now-1});room.movePlayer(id,answer==='O'?-8.5:8.5,-3,{now});}
+function gate(room,id,answer,now=Date.now()+1000){room.movePlayer(id,0,Rules.JUNCTION_Z,{now:now-2});room.movePlayer(id,answer==='O'?-8.5:8.5,Rules.JUNCTION_Z,{now:now-1});room.movePlayer(id,answer==='O'?-8.5:8.5,Rules.PORTAL_Z,{now});}
 function solve(room,id,now=Date.now()+1000){const r=room.race.runners.get(id),item=room.race.items[r.order[r.progress]];gate(room,id,item.answer,now);}
 test('레이스 정원은 시작 인원의 절반 내림이며 25→12, 50→25, 1→1',()=>{assert.equal(Rules.quota(25),12);assert.equal(Rules.quota(50),25);assert.equal(Rules.quota(1),1);assert.equal(Rules.quota(0),0);});
-test('벽을 가로질러 선택 문으로 건너뛸 수 없고 T자 경로만 이동',()=>{const blocked=Rules.move(Rules.START,{x:8,z:5.5});assert.ok(blocked.x<=1.65);assert.equal(blocked.z,5.5);const corner=Rules.move({x:0,z:-3},{x:-8.5,z:-3});assert.equal(Rules.gate(corner.x,corner.z),'O');assert.equal(Rules.inside(5,4),false);});
+test('벽을 가로질러 선택 문으로 건너뛸 수 없고 T자 경로만 이동',()=>{const blocked=Rules.move(Rules.START,{x:8,z:5.5});assert.ok(blocked.x<=1.65);assert.equal(blocked.z,5.5);const corner=Rules.move({x:0,z:Rules.JUNCTION_Z},{x:-8.5,z:Rules.JUNCTION_Z});assert.equal(Rules.gate(corner.x,corner.z),'');const portal=Rules.move(corner,{x:-8.5,z:Rules.PORTAL_Z});assert.equal(Rules.gate(portal.x,portal.z),'O');assert.equal(Rules.inside(5,4),false);});
 test('25명 중 12명만 서버 도착 순서대로 통과하고 그 즉시 나머지 입력 잠금',()=>{
  const room=setup(25,[questions[0]]);begin(room);for(let i=0;i<12;i++)solve(room,'p'+i,Date.now()+i*1000+1000);
  assert.equal(room.state,'JUDGE');assert.equal(room.race.quota,12);assert.equal(room.getAlivePlayers().length,12);assert.deepEqual(room.race.finished,Array.from({length:12},(_,i)=>'p'+i));

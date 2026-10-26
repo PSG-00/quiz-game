@@ -595,7 +595,7 @@ class Room {
     if(racing&&this.race?.runners.get(clientId)?.progress>=q.raceQuestions.length)return false;
     const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
     nx=ArenaRules.coordinate(clamp(nx,-halfW,halfW));
-    nz=ArenaRules.coordinate(clamp(nz,onStage?STAGE_MIN_Z+.8:SPECTATOR_MIN_Z,onStage?STAGE_MAX_Z-.8:SPECTATOR_MAX_Z));
+    nz=ArenaRules.coordinate(clamp(nz,racing?RaceRules.MIN_Z:onStage?STAGE_MIN_Z+.8:SPECTATOR_MIN_Z,onStage?STAGE_MAX_Z-.8:SPECTATOR_MAX_Z));
     if(enforceSpeed){
       p.moveCredit=Math.min(2,(p.moveCredit??1.5)+Math.max(0,now-(p.lastMoveAt??now))*.0085);p.lastMoveAt=now;
       const distance=Math.hypot(nx-p.x,nz-p.z);
