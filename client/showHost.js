@@ -49,37 +49,30 @@ window.ShowHost=(()=>{
  }
  function update(root,time,state){const d=root.userData,talking=['QUESTION','JUDGE','COUNTDOWN','ENDED'].includes(state);const blink=time%4200>4050;const frame=blink?1:talking&&Math.floor(time/240)%2?2:0;if(frame!==d.lastFrame){d.texture.offset.x=frame*.25;d.lastFrame=frame;}d.body.position.y=Math.sin(time*.0018)*.018;d.body.rotation.z=Math.sin(time*.0012)*.012;}
  function createBackdrop(){
-  // Paint once. All six box faces share one opaque atlas and one draw call.
-  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512;
-  const ctx=canvas.getContext('2d'),gradient=ctx.createLinearGradient(0,0,1024,448);
-  gradient.addColorStop(0,'#fff5e4');gradient.addColorStop(.5,'#f8faf1');gradient.addColorStop(1,'#f7e7f0');
-  ctx.fillStyle=gradient;ctx.fillRect(0,0,1024,448);
-  ctx.strokeStyle='#dfd0b9';ctx.lineWidth=3;ctx.strokeRect(16,16,992,416);
-  ctx.fillStyle='#d5ede2';ctx.beginPath();ctx.roundRect(393,56,238,420,[119,119,0,0]);ctx.fill();
-  ctx.strokeStyle='#fffaf0';ctx.lineWidth=9;ctx.beginPath();ctx.roundRect(414,78,196,402,[98,98,0,0]);ctx.stroke();
-  ctx.textAlign='center';ctx.fillStyle='#65586b';ctx.font='600 45px Georgia,serif';ctx.fillText('RESCENE',209,154);
-  ctx.font='600 14px sans-serif';ctx.fillStyle='#9d8b8e';ctx.fillText('OUR LITTLE QUIZ GARDEN',209,186);
-  ctx.font='600 28px Georgia,serif';ctx.fillStyle='#76627d';ctx.fillText('WITH RE:MINE',815,270);
-  ctx.font='13px sans-serif';ctx.fillStyle='#9c8b98';ctx.fillText('A LITTLE MOMENT TOGETHER',815,299);
-  function flower(x,y,r,color){
-   ctx.fillStyle=color;
-   for(let i=0;i<5;i++){const a=i*Math.PI*2/5-Math.PI/2;ctx.beginPath();ctx.ellipse(x+Math.cos(a)*r*.57,y+Math.sin(a)*r*.57,r*.43,r*.43,0,0,Math.PI*2);ctx.fill();}
-   ctx.fillStyle='#f5cf80';ctx.beginPath();ctx.arc(x,y,r*.21,0,Math.PI*2);ctx.fill();
-  }
-  flower(810,140,67,'#e2cde9');flower(122,294,31,'#c9e5d9');flower(286,326,43,'#ebcbd4');
-  ctx.fillStyle='#e6d6ef';ctx.fillRect(0,414,1024,14);
-  ctx.fillStyle='#dac6b4';ctx.fillRect(0,428,1024,20);
-  ctx.fillStyle='#ded3c5';ctx.fillRect(0,448,1024,64);
+  // One opaque atlas; the approved photograph is drawn once without stretching.
+  const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=1024;
+  const ctx=canvas.getContext('2d'),frontHeight=648;
+  ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,2048,1024);
+  ctx.fillStyle='#fffaf1';ctx.fillRect(0,0,2048,frontHeight);
   const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;
-  const geometry=new T.BoxGeometry(12,3.8,.22),uv=geometry.attributes.uv;
+  const image=new Image();image.decoding='async';
+  image.onload=()=>{
+    const width=frontHeight*image.width/image.height,left=(canvas.width-width)/2;
+    ctx.drawImage(image,left,0,width,frontHeight);
+    // A restrained mint rail extends the design across the wide stage wings.
+    ctx.strokeStyle='#9ac7b4';ctx.lineWidth=5;ctx.strokeRect(20,16,2008,frontHeight-32);
+    texture.needsUpdate=true;mesh.userData.imageLoaded=true;
+  };
+  const geometry=new T.BoxGeometry(24,7.6,.22),uv=geometry.attributes.uv;
   for(let i=0;i<uv.count;i++){
-   if(Math.floor(i/4)===4)uv.setXY(i,uv.getX(i),.125+uv.getY(i)*.875);
-   else uv.setXY(i,.02,.06);
+    if(Math.floor(i/4)===4)uv.setXY(i,uv.getX(i),1-frontHeight/1024+uv.getY(i)*frontHeight/1024);
+    else uv.setXY(i,.01,.1);
   }
   geometry.clearGroups();
   const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({map:texture}));
-  mesh.name='RESCENE garden backdrop';mesh.position.set(0,2.5,-1.5);
-  mesh.userData={triangles:12,drawCalls:1,textureBytes:1024*512*4,staticBackdrop:true};
+  mesh.name='RESCENE member photo backdrop';mesh.position.set(0,3.7,-1.5);
+  mesh.userData={triangles:12,drawCalls:1,textureBytes:2048*1024*4,staticBackdrop:true,imageLoaded:false};
+  image.src='./assets/stage/rescene-quiz-members-v2.webp';
   return mesh;
  }
  return {create,update,createBackdrop};
