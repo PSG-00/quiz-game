@@ -7,6 +7,7 @@
   {id:'may-school',name:'메이 큣걸단',description:'밝은 갈색 단발 · 브이넥 니트 · 주름치마 · 레그워머',preview:'./assets/models/may-school-sd-v2-preview.png',hairStyle:'bob',hair:0x987560,clothes:0x9b91a7,tie:0x77748f},
   {id:'zena',name:'제나',description:'빨간 베레모 · 긴 갈색 생머리 · 흰 티셔츠 · 붉은 체크치마',preview:'./assets/models/zena-sd-v2-preview.png',hairStyle:'long',hair:0x8a4f31,clothes:0xefeeea}
  ];
+ profiles.push({id:'plana-original',name:'PLANA 원본 · 테스트',description:'원본 비율·텍스처·뼈대 유지 · 걷기 클립 없음',preview:'./assets/models/plana-original-preview.png',hidden:!(typeof location!=='undefined'&&new URLSearchParams(location.search).get('test')==='plana'),testOnly:true});
  const normalize=id=>{if(typeof id==='string')id=id.replace(/-(plana|chibi)$/,'');if(id==='minami-pink')id='minami';return profiles.some(p=>p.id===id)?id:'woni';};
  return {profiles,normalize,get:id=>profiles.find(p=>p.id===normalize(id))||profiles[0]};
 });

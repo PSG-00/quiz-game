@@ -163,7 +163,7 @@ class Room {
       eligible:alive,
       connected:true,
       spriteSeed,
-      avatarId:AvatarCatalog.normalize(avatarId),
+      avatarId:AvatarCatalog.normalize(this.testAvatarId||avatarId),
       submittedText: '',
       hasSubmitted: false,
       lastResult: null

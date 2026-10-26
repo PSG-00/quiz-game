@@ -3,7 +3,7 @@
    Only remote players use this path; local player keeps its full live rig. */
 window.InstancedAvatars=(()=>{
  const T=THREE,frames=32,capacity=128,pools=new Map();
- let scene=null,supported=false;
+ let scene=null,supported=false,maxTextureSize=0;
  const skinShader=`
  attribute vec4 skinIndex;
  attribute vec4 skinWeight;
@@ -33,15 +33,17 @@ window.InstancedAvatars=(()=>{
    return skin;
  }
  `;
- function attach(target,renderer){scene=target;supported=renderer.capabilities.floatVertexTextures&&renderer.capabilities.maxVertexTextures>0;}
+ function attach(target,renderer){scene=target;supported=renderer.capabilities.floatVertexTextures&&renderer.capabilities.maxVertexTextures>0;maxTextureSize=renderer.capabilities.maxTextureSize;}
  function build(id){
-   const model=AvatarModels[id];if(!scene||!supported||!model?.loaded)return null;
+   const model=id==='plana-original'?window.PlanaOriginalModel:AvatarModels[id];if(!scene||!supported||!model?.loaded)return null;
+   const poseFrames=model.poseFrames??frames;
    const rig=model.create(),parts=[];rig.updateMatrixWorld(true);
-   rig.traverse(mesh=>{if(mesh.isMesh)parts.push({source:mesh,bones:mesh.isSkinnedMesh?mesh.skeleton.bones.length:1,data:new Float32Array((mesh.isSkinnedMesh?mesh.skeleton.bones.length:1)*16*(frames+1))});});
+   rig.traverse(mesh=>{if(mesh.isMesh)parts.push({source:mesh,bones:mesh.isSkinnedMesh?mesh.skeleton.bones.length:1,data:new Float32Array((mesh.isSkinnedMesh?mesh.skeleton.bones.length:1)*16*(poseFrames+1))});});
    if(!parts.length){model.dispose(rig);return null;}
+   if(parts.some(p=>p.bones*4>maxTextureSize)){model.dispose(rig);return null;}
    const transform=new T.Matrix4(),bone=new T.Matrix4();
    // Bake the same live pose implementation (including floor contact) once.
-   for(let row=0;row<=frames;row++){
+   for(let row=0;row<=poseFrames;row++){
      model.update(rig,false,row>0,0,0,{phase:row?((row-1)/frames)*Math.PI*2:0,blend:row?1:0});
      rig.updateMatrixWorld(true);
      for(const part of parts){
@@ -61,7 +63,7 @@ window.InstancedAvatars=(()=>{
    for(const part of parts){
      const shared=palettes.find(p=>p.data.length===part.data.length&&p.data.every((v,i)=>v===part.data[i]));
      if(shared){part.texture=shared.texture;continue;}
-     const texture=new T.DataTexture(part.data,part.bones*4,frames+1,T.RGBAFormat,T.FloatType);
+     const texture=new T.DataTexture(part.data,part.bones*4,poseFrames+1,T.RGBAFormat,T.FloatType);
      texture.minFilter=texture.magFilter=T.NearestFilter;texture.generateMipmaps=false;texture.needsUpdate=true;
      part.texture=texture;palettes.push(part);
    }
@@ -83,7 +85,7 @@ window.InstancedAvatars=(()=>{
      geometry.setAttribute('crowdPose',poses[level]);
      const material=source.material.clone();material.skinning=false;
      material.onBeforeCompile=shader=>{
-       shader.uniforms.crowdBones={value:texture};shader.uniforms.crowdTextureSize={value:new T.Vector2(width,frames+1)};
+       shader.uniforms.crowdBones={value:texture};shader.uniforms.crowdTextureSize={value:new T.Vector2(width,poseFrames+1)};
        shader.vertexShader=skinShader+shader.vertexShader;
        shader.vertexShader=shader.vertexShader.replace('void main() {','void main() {\nmat4 crowdDeform=crowdSkin();');
        shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','vec3 objectNormal=normalize(mat3(crowdDeform)*normal);\n#ifdef USE_TANGENT\nvec3 objectTangent=normalize(mat3(crowdDeform)*tangent.xyz);\n#endif');
@@ -97,7 +99,7 @@ window.InstancedAvatars=(()=>{
      mesh.castShadow=false;mesh.receiveShadow=true;scene.add(mesh);
      return {mesh,texture,level};
    }));
-   const pool={id,batches,poses,next:0,free:[],live:new Set(),dirty:false,visualHeight:rig.userData.visualHeight};
+   const pool={id,batches,poses,next:0,free:[],live:new Set(),dirty:false,visualHeight:rig.userData.visualHeight,frames:poseFrames,fullDetail:Boolean(model.fullDetail)};
    model.dispose(rig);pools.set(id,pool);return pool;
  }
  function create(id,seed){
@@ -111,7 +113,7 @@ window.InstancedAvatars=(()=>{
  function update(root,ghost,moving,time,seed,motion){
    const d=root.userData;if(ghost){hide(root);return;}
    root.updateWorldMatrix(true,false);
-   d.phase=(motion?.phase||0)/(Math.PI*2)*frames;d.blend=motion?.blend||0;
+   d.phase=(motion?.phase||0)/(Math.PI*2)*frames;d.blend=d.pool.frames===0?0:motion?.blend||0;
    d.shown=true;d.pool.dirty=true;
  }
  function flush(camera,height){
@@ -120,7 +122,7 @@ window.InstancedAvatars=(()=>{
      // Compact only visible living instances. A zero-scale matrix would still
      // run the vertex shader for every hidden character's entire geometry.
      for(const root of pool.live)if(root.userData.shown){
-       const d=root.userData,level=AvatarLOD.level(root,camera,height),count=counts[level]++;d.drawSlot=count;pool.poses[level].setXY(count,d.phase,d.blend);
+       const d=root.userData,level=pool.fullDetail?0:AvatarLOD.level(root,camera,height),count=counts[level]++;d.drawSlot=count;pool.poses[level].setXY(count,d.phase,d.blend);
        for(const {mesh,level:l} of pool.batches)if(l===level)mesh.setMatrixAt(count,root.matrixWorld);
      }
      for(const {mesh,level} of pool.batches){mesh.count=counts[level];mesh.visible=mesh.count>0;mesh.instanceMatrix.needsUpdate=true;}
@@ -128,6 +130,6 @@ window.InstancedAvatars=(()=>{
    }
  }
  function dispose(root){const d=root.userData;if(!d.pool.live.delete(root))return;hide(root);d.pool.free.push(d.slot);}
- function stats(){return {supported,lod:true,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,levels:p.counts||[0,0,0],draws:p.batches.filter(b=>b.mesh.visible).length,frames,bones:p.batches[0].texture.image.width/4,textureBytes:[...new Set(p.batches.map(b=>b.texture))].reduce((n,t)=>n+t.image.data.byteLength,0)}))};}
+ function stats(){return {supported,lod:true,players:[...pools.values()].reduce((n,p)=>n+p.live.size,0),groups:[...pools.values()].map(p=>({avatar:p.id,players:p.live.size,levels:p.counts||[0,0,0],draws:p.batches.filter(b=>b.mesh.visible).length,frames:p.frames,bones:p.batches[0].texture.image.width/4,textureBytes:[...new Set(p.batches.map(b=>b.texture))].reduce((n,t)=>n+t.image.data.byteLength,0)}))};}
  return {attach,create,update,hide,flush,dispose,stats};
 })();

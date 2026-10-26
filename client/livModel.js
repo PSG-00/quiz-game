@@ -20,7 +20,7 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
    template.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
    resolve(true);window.dispatchEvent(new CustomEvent('avatar-model-ready',{detail:{avatarId}}));if(avatarId==='liv')window.dispatchEvent(new Event('liv-model-ready'));
   },undefined,e=>{error=e;console.error(avatarId+' 3D 모델을 불러오지 못했습니다.',e);resolve(false);});
- }));}if(!lazy)load();
+ }));}if(!lazy&&new URLSearchParams(location.search).get('test')!=='plana')load();
  function create(){
   if(!template)return null;
   const root=new THREE.Group(),body=THREE.SkeletonUtils.clone(template),materials=[],bySource=new Map();root.add(body);

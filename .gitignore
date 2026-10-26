@@ -6,3 +6,6 @@ data/
 client/perf/
 # Intermediate atlas images/packing metadata; final self-contained GLBs are tracked.
 client/assets/models/*-compact-v1.atlas*
+# User-supplied original stress-test export, generated locally from Plana2.blend.
+client/assets/models/plana-original-test.glb
+client/assets/models/plana-original-preview.png

@@ -241,4 +241,8 @@ if(process.env.OX_PUBLIC_TEST_BOTS==='48'){
  const {enablePublicTestRoom}=require('./PublicTestRoom');
  const test=enablePublicTestRoom(roomManager);console.log(`PUBLIC_TEST_ROOM_READY ${test.room.id} · 봇 48명 / 사람 2명`);
 }
+if(process.env.OX_PLANA_TEST==='1'){
+ const {enablePublicTestRoom}=require('./PublicTestRoom');
+ const test=enablePublicTestRoom(roomManager,{botCount:49,avatars:['plana-original'],title:'[PLANA 원본] 봇 49명 · 사람 1명',key:'publicPlanaTestRoom'});console.log(`PLANA_TEST_ROOM_READY ${test.room.id} · 봇 49명 / 사람 1명`);
+}
 server.listen(PORT,()=>console.log(`모두의 퀴즈: http://localhost:${PORT}`));

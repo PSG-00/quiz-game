@@ -88,6 +88,7 @@ scene.background = new THREE.Color(0xeee8e2);
 const camera = new THREE.PerspectiveCamera(42,window.innerWidth/window.innerHeight,.1,600);
 let lowSpecMode=false;
 try{lowSpecMode=localStorage.getItem('ox-low-spec-v1')==='1';}catch{}
+if(new URLSearchParams(location.search).get('test')==='plana')lowSpecMode=false;
 // Shared batches are allocated once on PC and mobile. Detail restoration is
 // spread across frames, keeping the local player's model independent.
 MobileCrowd.attach(scene);
@@ -1187,7 +1188,7 @@ function handleWorldTick(compactList) {
       setEntityDetail(entity,entity.id!==myClientId&&lowSpecMode);
     }else if(wasEligible===false&&entity.eligible){
       setEntityDetail(entity,entity.id!==myClientId&&lowSpecMode);
-    }else if(entity.id===myClientId&&window.AvatarModels?.[avatarId]?.loaded&&!entity.charSprite.userData.importedGLB){
+    }else if(entity.id===myClientId&&AvatarActors.model(avatarId)?.loaded&&!entity.charSprite.userData.importedGLB){
       setEntityDetail(entity,false);
     }
 

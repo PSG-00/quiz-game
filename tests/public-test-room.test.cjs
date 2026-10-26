@@ -1,6 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {RoomManager}=require('../server/RoomManager'),{enablePublicTestRoom,TITLE}=require('../server/PublicTestRoom');
 function setup(){const manager=new RoomManager({startLoop:false});return {manager,testRoom:enablePublicTestRoom(manager,{startLoop:false})};}
+test('PLANA 시험은 기존 방을 보존하고 원본 봇49명+사람1명 정원과 동일 아바타를 유지',()=>{
+ const {manager,testRoom}=setup(),plana=enablePublicTestRoom(manager,{startLoop:false,botCount:49,avatars:['plana-original'],title:'PLANA 원본',key:'publicPlanaTestRoom'});
+ assert.equal(manager.rooms.size,2);assert.equal(testRoom.room.players.size,48);assert.equal(plana.room.players.size,49);
+ plana.room.addPlayer('human','시험',null,'woni');assert.equal(plana.room.players.size,50);assert.ok([...plana.room.players.values()].every(p=>p.avatarId==='plana-original'));
+ assert.throws(()=>plana.room.addPlayer('extra','정원 초과'),/최대 50명/);manager.close();
+});
 test('공개 테스트 방은 하나만 생성하고 봇 48명과 사람 2자리, 모든 문제 15초',()=>{
  const {manager,testRoom}=setup();assert.equal(enablePublicTestRoom(manager,{startLoop:false}),testRoom);assert.equal(manager.rooms.size,1);
  const room=testRoom.room;assert.equal(room.title,TITLE);assert.equal(room.players.size,48);assert.equal(room.maxPlayers,50);assert.ok(room.questions.every(q=>q.timeLimit===15));

@@ -1,6 +1,6 @@
 /* Approved member GLBs only. No procedural clay or legacy body geometry. */
 window.AvatarActors=(()=>{
- function model(id){return window.AvatarModels?.[id]||window.AvatarModels?.woni;}
+ function model(id){return id==='plana-original'?window.PlanaOriginalModel:window.AvatarModels?.[id]||window.AvatarModels?.woni;}
  function pending(avatarId){const root=new THREE.Group(),body=new THREE.Group();root.add(body);root.userData={avatarId,pendingModel:true,body,visualHeight:3.16};return root;}
  function create(seed=0,avatarId='woni'){
   const selected=model(avatarId);selected?.load();return selected?.loaded?selected.create():pending(avatarId);

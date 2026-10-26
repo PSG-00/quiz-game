@@ -1,19 +1,19 @@
 const AVATARS=['woni','liv','minami','may','may-school','zena'];
 const TITLE='[테스트] 봇 48명 · 사람 2명';
-function enablePublicTestRoom(manager,{startLoop=true}={}){
- if(manager.publicTestRoom&&!manager.publicTestRoom.closed)return manager.publicTestRoom;
- const room=manager.createRoom({title:TITLE,targetWinners:1,restSeconds:10,questions:[
-  {type:'MINORITY',question:'적은 쪽을 골라 보세요. 봇 48명이 함께 움직입니다.',timeLimit:15},
+function enablePublicTestRoom(manager,{startLoop=true,botCount=48,avatars=AVATARS,title=TITLE,key='publicTestRoom'}={}){
+ if(manager[key]&&!manager[key].closed)return manager[key];
+ const room=manager.createRoom({title,targetWinners:1,restSeconds:10,questions:[
+  {type:'MINORITY',question:`적은 쪽을 골라 보세요. 봇 ${botCount}명이 함께 움직입니다.`,timeLimit:15},
   {type:'OX',question:'리센느 멤버는 5명이다.',answer:'O',timeLimit:15},
   {type:'MINORITY',question:'소수결 패자부활전! 유령 중 적은 쪽이 살아납니다.',isRevival:true,timeLimit:15},
   {type:'MULTIPLE',inputMode:'MOVE',question:'네 구역 이동 테스트: 원하는 보기로 이동해 보세요.',choices:['첫 번째 테스트 구역','두 번째 테스트 구역','세 번째 테스트 구역','네 번째 테스트 구역'],answer:'1',timeLimit:15},
   {type:'SHORT',question:'대한민국의 수도는?',answer:'서울,서울특별시',timeLimit:15}
  ]},null);
  // This set is created only by the trusted server startup path, never a client flag.
- room.testBotIds=new Set();const bots=[];
- for(let i=0;i<48;i++){
+ room.testBotIds=new Set();if(avatars.length===1)room.testAvatarId=avatars[0];const bots=[];
+ for(let i=0;i<botCount;i++){
   const id=room.id+'_bot_'+i;room.testBotIds.add(id);
-  const player=room.addPlayer(id,'부하봇'+String(i+1).padStart(3,'0'),null,AVATARS[i%AVATARS.length]);
+  const player=room.addPlayer(id,'부하봇'+String(i+1).padStart(3,'0'),null,avatars[i%avatars.length]);
   bots.push({player,index:i,answerKey:null});
  }
  room.hostId=bots[0].player.id;
@@ -36,6 +36,6 @@ function enablePublicTestRoom(manager,{startLoop=true}={}){
   close(){if(controller.closed)return;controller.closed=true;clearInterval(controller.interval);manager.closeRoom(room);}
  };
  if(startLoop){controller.interval=setInterval(()=>controller.tick(),100);controller.interval.unref?.();}
- manager.publicTestRoom=controller;return controller;
+ manager[key]=controller;return controller;
 }
 module.exports={enablePublicTestRoom,TITLE};

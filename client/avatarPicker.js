@@ -4,6 +4,7 @@ window.AvatarPicker=(()=>{
   try{selectedId=AvatarCatalog.normalize(localStorage.getItem('ox-avatar-v1'));}catch{}
   const cards=document.getElementById('avatar-options');
   if(AvatarCatalog.get(selectedId).hidden)selectedId='woni';
+  if(new URLSearchParams(location.search).get('test')==='plana')selectedId='plana-original';
   try{localStorage.setItem('ox-avatar-v1',selectedId);}catch{}
   for(const profile of AvatarCatalog.profiles.filter(p=>!p.hidden))cards.append(makeOption(profile,profile.name));
   document.getElementById('avatar-dialog').addEventListener('close',()=>{cancelAnimationFrame(frame);frame=null;});
