@@ -21,6 +21,7 @@ function saveMyQuiz(){
  if(!requireLibrary()||pendingQuizSaves.size||creatingRoomRequestId)return;
  if(!Number.isInteger(currentQuizPayload().restSeconds)||currentQuizPayload().restSeconds<0||currentQuizPayload().restSeconds>60){setQuizStatus('쉬는 시간은 0~60초 정수로 입력해 주세요.');return;}
  if(builderQuestions.some(q=>q.type==='MINORITY')&&!serverFeatures.minority){setQuizStatus('소수결은 서버 업데이트가 적용되면 저장할 수 있어요. 작성 내용은 브라우저에 유지됩니다.');return;}
+ if(builderQuestions.some(q=>q.type==='RACE')&&!serverFeatures.race){setQuizStatus('OX 레이스는 서버 업데이트 후 저장할 수 있어요. 작성 내용은 유지됩니다.');return;}
  for(let i=0;i<builderQuestions.length;i++){const error=QuizLimits.error(builderQuestions[i]);if(error){showBuilderError(error,i);return;}}
  const requestId=queueQuizSave();setQuizStatus('서버에 저장 중…');
  ws.send(JSON.stringify({type:'SAVE_QUIZ',requestId,...pendingQuizSaves.get(requestId).payload}));
@@ -189,9 +190,10 @@ function renderQuizBuilder() {
   const q=builderQuestions[activeQuizIndex];if(!q)return;
   const i=activeQuizIndex;
   document.getElementById('builder-count').textContent=`${builderQuestions.length}문제`;
-  const types={OX:'OX',MULTIPLE:'객관식',SHORT:'주관식',MINORITY:'소수결'};
+  const types={OX:'OX',MULTIPLE:'객관식',SHORT:'주관식',MINORITY:'소수결',RACE:'OX 레이스'};
   let answer='';
-  if(q.type==='MINORITY') answer=`<div class="minority-rule-help"><strong>인원이 적은 구역이 승리해요.</strong><p>왼쪽과 오른쪽 중 하나를 선택하세요. 제한시간이 끝났을 때 참가자가 적은 쪽이 살아남고, 인원이 같으면 서버가 승리 구역을 무작위로 결정해요.</p><p>패자부활전에서는 참가한 유령만 집계하며 승리 구역의 유령이 부활해요.</p><small>빈 구역도 0명으로 계산해요. 일반 라운드에서 전원 탈락하면 기존 규칙대로 직전 생존자를 기준으로 종료·추첨해요.</small></div>`;
+  if(q.type==='RACE') answer=`<div class="race-builder-help"><p>T자 길에서 왼쪽 O · 오른쪽 X로 이동해요. 정답은 다음 문제, 오답은 같은 문제로 출발점에서 다시 도전해요. 시작 인원의 절반(내림)이 선착순 통과해요. 25명 → 12명, 1명 → 1명.</p><label>OX 문제 개수 <input type="number" min="1" max="10" aria-label="레이스 문제 개수" value="${q.raceQuestions?.length||1}" onchange="setRaceQuestionCount(${i},this.valueAsNumber)">개</label><div class="race-question-list">${(q.raceQuestions||[]).map((item,n)=>`<section class="race-question-row"><label>${n+1}번 문제<textarea rows="2" maxlength="200" aria-label="레이스 ${n+1}번 문제" oninput="updateRaceQuestion(${i},${n},this)">${escapeHtml(item.question)}</textarea></label><div class="builder-ox">${['O','X'].map(a=>`<button type="button" aria-label="레이스 ${n+1}번 정답 ${a}" aria-pressed="${item.answer===a}" class="${item.answer===a?'selected':''}" onclick="setRaceAnswer(${i},${n},'${a}')">${a}</button>`).join('')}</div></section>`).join('')}</div><small>각 100자 이내 · 개인별 출제 순서는 무작위 · 완주자가 없으면 탈락 없이 재도전</small></div>`;
+  else if(q.type==='MINORITY') answer=`<div class="minority-rule-help"><strong>인원이 적은 구역이 승리해요.</strong><p>왼쪽과 오른쪽 중 하나를 선택하세요. 제한시간이 끝났을 때 참가자가 적은 쪽이 살아남고, 인원이 같으면 서버가 승리 구역을 무작위로 결정해요.</p><p>패자부활전에서는 참가한 유령만 집계하며 승리 구역의 유령이 부활해요.</p><small>빈 구역도 0명으로 계산해요. 일반 라운드에서 전원 탈락하면 기존 규칙대로 직전 생존자를 기준으로 종료·추첨해요.</small></div>`;
   else if(q.type==='OX') answer=`<div class="builder-ox">${['O','X'].map(a=>`<button type="button" class="${q.answer===a?'selected':''}" aria-label="${a} 정답" aria-pressed="${q.answer===a}" onclick="chooseBuilderAnswer('${a}')">${a}</button>`).join('')}</div>`;
   else if(q.type==='SHORT') answer=`<textarea id="builder-short-answer" class="wide-answer-input" rows="3" maxlength="1000" aria-label="주관식 정답" placeholder="인정할 정답을 입력하세요. 예: 서울, 서울특별시" oninput="updateBuilderField(${i},'answer',this.value)">${escapeHtml(q.answer)}</textarea><p class="builder-help">정답은 각 30자까지, 여러 정답은 쉼표로 나눠 주세요. <b>서울, 서울특별시</b> 중 하나만 제출해도 정답이에요.</p>`;
   else answer=`<div class="builder-choice-list">${[0,1,2,3].map(c=>`<label class="builder-choice-row"><input type="radio" name="builder-correct-choice" aria-label="${c+1}번을 정답으로" ${q.answer===String(c+1)?'checked':''} onchange="updateBuilderField(${i},'answer','${c+1}')"><span>${c+1}</span><textarea rows="2" maxlength="60" aria-label="${c+1}번 보기" placeholder="${c+1}번 보기 내용" oninput="updateBuilderChoice(${i},${c},this.value)">${escapeHtml(q.choices?.[c]||'')}</textarea></label>`).join('')}</div><p class="builder-help">정답 보기 왼쪽의 동그라미를 선택하세요.</p><label class="builder-label">참가자의 답 선택 방식<select aria-label="객관식 입력 방식" onchange="updateBuilderField(${i},'inputMode',this.value)"><option value="BUTTON" ${q.inputMode!=='MOVE'?'selected':''}>보기 버튼 누르기</option><option value="MOVE" ${q.inputMode==='MOVE'?'selected':''}>1~4번 구역으로 이동</option></select></label>`;
@@ -200,12 +202,12 @@ function renderQuizBuilder() {
       <nav class="quiz-outline" aria-label="문제 목록">${builderQuestions.map((item,n)=>`<button class="quiz-outline-item ${n===i?'active':''}" aria-current="${n===i}" onclick="selectQuizStep(${n})"><span class="outline-number">${String(n+1).padStart(2,'0')}</span><span><small>${types[item.type]}${item.isRevival?' · 부활전':''}</small><span id="quiz-summary-${n}">${escapeHtml(item.question||'새 문제를 작성하세요')}</span></span></button>`).join('')}</nav>
       <section class="quiz-editor">
         <div class="editor-heading"><strong>문제 ${i+1} <span>/ ${builderQuestions.length}</span></strong><div><button id="builder-undo" title="되돌리기" aria-label="되돌리기" ${quizUndoStack.length?'':'disabled'} onclick="undoQuizEdit()">↶</button><button title="위로 이동" aria-label="문제 위로 이동" ${i===0?'disabled':''} onclick="moveQuizStep(-1)">↑</button><button title="아래로 이동" aria-label="문제 아래로 이동" ${i===builderQuestions.length-1?'disabled':''} onclick="moveQuizStep(1)">↓</button><button onclick="duplicateQuizStep()">복제</button><button class="delete-question" onclick="removeQuizStep(${i})">삭제</button></div></div>
-        <div class="builder-type-tabs" role="group" aria-label="문제 유형">${Object.entries(types).map(([type,label])=>`<button aria-pressed="${q.type===type}" class="${q.type===type?'active':''}" ${type==='MINORITY'&&!serverFeatures.minority?'disabled title="서버 업데이트 적용 후 사용할 수 있어요"':''} onclick="changeBuilderType(${i},'${type}')">${label}</button>`).join('')}</div>
-        <label class="builder-label" for="builder-question">${q.type==='MINORITY'?'라운드 안내':'문제 내용'} <small id="builder-char-count">${QuizLimits.length(q.question)} / 100</small></label>
+        <div class="builder-type-tabs" role="group" aria-label="문제 유형">${Object.entries(types).map(([type,label])=>`<button aria-pressed="${q.type===type}" class="${q.type===type?'active':''}" ${(type==='MINORITY'&&!serverFeatures.minority)||(type==='RACE'&&!serverFeatures.race)?'disabled title="서버 업데이트 적용 후 사용할 수 있어요"':''} onclick="changeBuilderType(${i},'${type}')">${label}</button>`).join('')}</div>
+        <label class="builder-label" for="builder-question">${['MINORITY','RACE'].includes(q.type)?'라운드 안내':'문제 내용'} <small id="builder-char-count">${QuizLimits.length(q.question)} / 100</small></label>
         <textarea id="builder-question" rows="4" maxlength="200" placeholder="참가자에게 보여 줄 문제를 입력하세요." oninput="updateBuilderField(${i},'question',this.value)">${escapeHtml(q.question)}</textarea>
-        <div class="builder-label">${q.type==='MINORITY'?'자동 판정 규칙':q.type==='MULTIPLE'?'보기와 정답':'정답'}</div>
+        <div class="builder-label">${q.type==='RACE'?'레이스 OX 문제 목록':q.type==='MINORITY'?'자동 판정 규칙':q.type==='MULTIPLE'?'보기와 정답':'정답'}</div>
         <div class="builder-answer-section">${answer}</div>
-        <div class="builder-options"><label>제한시간 <span><input type="number" min="5" max="60" aria-label="제한시간" value="${q.timeLimit}" oninput="updateBuilderField(${i},'timeLimit',Number(this.value))">초</span></label><label class="revival-toggle"><input type="checkbox" ${q.isRevival?'checked':''} onchange="toggleBuilderRevival(${i},this.checked)"><span>패자부활전<small>유령만 참가하는 문제</small></span></label></div>
+        <div class="builder-options"><label>${q.type==='RACE'?'레이스 전체 제한시간':'제한시간'} <span><input type="number" min="5" max="${q.type==='RACE'?300:60}" aria-label="제한시간" value="${q.timeLimit}" oninput="updateBuilderField(${i},'timeLimit',Number(this.value))">초</span></label><label class="revival-toggle"><input type="checkbox" ${q.isRevival?'checked':''} onchange="toggleBuilderRevival(${i},this.checked)"><span>패자부활전<small>유령만 참가하는 문제</small></span></label></div>
         <div class="editor-navigation"><button class="btn btn-ghost" ${i===0?'disabled':''} onclick="selectQuizStep(${i-1})">이전 문제</button><button class="btn btn-primary" onclick="${i===builderQuestions.length-1?'addQuizStep(false)':`selectQuizStep(${i+1})`}">${i===builderQuestions.length-1?'+ 다음 문제 추가':'다음 문제 →'}</button></div>
       </section>
     </div>`;
@@ -216,7 +218,10 @@ function removeQuizStep(index){rememberQuizEdit();builderQuestions.splice(index,
 function duplicateQuizStep(){rememberQuizEdit();builderQuestions.splice(activeQuizIndex+1,0,JSON.parse(JSON.stringify(builderQuestions[activeQuizIndex])));activeQuizIndex++;commitQuizStructure();}
 function moveQuizStep(delta){const next=activeQuizIndex+delta;if(next<0||next>=builderQuestions.length)return;rememberQuizEdit();[builderQuestions[next],builderQuestions[activeQuizIndex]]=[builderQuestions[activeQuizIndex],builderQuestions[next]];activeQuizIndex=next;commitQuizStructure();}
 function undoQuizEdit(){const state=quizUndoStack.pop();if(!state)return;builderQuestions=state.questions;activeQuizIndex=state.activeIndex;editorGeneration++;editingQuizId=state.editingQuizId||null;for(const [id,value] of Object.entries(state.settings||{}))document.getElementById(id).value=value;commitQuizStructure();}
-function changeBuilderType(index,type){const q=builderQuestions[index];if(q.type===type)return;rememberQuizEdit();q.type=type;q.answer=type==='OX'?'O':type==='MULTIPLE'?'1':'';if(type==='MINORITY'&&!q.question.trim())q.question='사람이 적은 쪽으로 이동하세요!';q.choices=q.choices?.length===4?q.choices:['','','',''];commitQuizStructure();}
+function changeBuilderType(index,type){const q=builderQuestions[index];if(q.type===type)return;rememberQuizEdit();q.type=type;q.answer=type==='OX'?'O':type==='MULTIPLE'?'1':'';if(type==='RACE'){q.raceQuestions=q.raceQuestions?.length?q.raceQuestions:Array.from({length:3},()=>({question:'',answer:'O'}));q.timeLimit=120;if(!q.question.trim())q.question='OX 문제를 모두 통과하세요!';}else{q.timeLimit=Math.min(60,q.timeLimit);}if(type==='MINORITY'&&!q.question.trim())q.question='사람이 적은 쪽으로 이동하세요!';q.choices=q.choices?.length===4?q.choices:['','','',''];commitQuizStructure();}
+function setRaceQuestionCount(i,count){rememberQuizEdit();count=Math.max(1,Math.min(10,Math.floor(count)||1));builderQuestions[i].raceQuestions=Array.from({length:count},(_,n)=>builderQuestions[i].raceQuestions?.[n]||{question:'',answer:'O'});commitQuizStructure();}
+function updateRaceQuestion(i,n,input){input.value=Array.from(input.value).slice(0,100).join('');builderQuestions[i].raceQuestions[n].question=input.value;scheduleQuizDraftSave();}
+function setRaceAnswer(i,n,answer){builderQuestions[i].raceQuestions[n].answer=answer;renderQuizBuilder();saveQuizDraft();}
 function chooseBuilderAnswer(answer){builderQuestions[activeQuizIndex].answer=answer;renderQuizBuilder();saveQuizDraft();}
 function toggleBuilderRevival(index,checked){builderQuestions[index].isRevival=checked;renderQuizBuilder();saveQuizDraft();}
 function updateBuilderField(index,field,value){if(field==='question'){value=Array.from(value).slice(0,QuizLimits.QUESTION).join('');document.getElementById('builder-question').value=value;}builderQuestions[index][field]=value;if(field==='question'){document.getElementById(`quiz-summary-${index}`).textContent=value||'새 문제를 작성하세요';document.getElementById('builder-char-count').textContent=`${QuizLimits.length(value)} / 100`;}scheduleQuizDraftSave();}
@@ -230,11 +235,13 @@ function validateQuizDraft(){
     const q=builderQuestions[i];let error='';
     if(QuizLimits.error(q))error=QuizLimits.error(q);
     else if(q.type==='MINORITY'&&!serverFeatures.minority)error='소수결 서버 업데이트 적용을 기다려 주세요. 작성 내용은 유지됩니다.';
+    else if(q.type==='RACE'&&!serverFeatures.race)error='OX 레이스 서버 업데이트 적용을 기다려 주세요.';
     else if(!q.question.trim())error='문제 내용을 입력해 주세요.';
-    else if(q.type!=='MINORITY'&&!String(q.answer).trim())error='정답을 입력해 주세요.';
+    else if(!['MINORITY','RACE'].includes(q.type)&&!String(q.answer).trim())error='정답을 입력해 주세요.';
+    else if(q.type==='RACE'&&q.raceQuestions.some(item=>!item.question.trim()))error='레이스의 OX 문제 내용을 모두 입력해 주세요.';
     else if(q.type==='SHORT'&&!q.answer.split(',').some(a=>a.trim()))error='인정할 정답을 한 개 이상 입력해 주세요.';
     else if(q.type==='MULTIPLE'&&(q.choices?.length!==4||q.choices.some(a=>!a.trim())))error='보기 네 개를 모두 입력해 주세요.';
-    else if(!Number.isFinite(q.timeLimit)||q.timeLimit<5||q.timeLimit>60)error='제한시간은 5~60초로 입력해 주세요.';
+    else if(!Number.isFinite(q.timeLimit)||q.timeLimit<5||q.timeLimit>(q.type==='RACE'?300:60))error=q.type==='RACE'?'레이스 제한시간은 5~300초로 입력해 주세요.':'제한시간은 5~60초로 입력해 주세요.';
     if(error){showBuilderError(error,i);return false;}
   }
   return true;

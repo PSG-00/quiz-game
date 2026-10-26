@@ -17,6 +17,7 @@ let serverFeatures={};
 let myClientId = null;
 let currentRoomId = null;
 let roomState = null;
+let raceOwn=null,raceActive=false,raceScene=null;
 let renderedPhaseKey = null;
 const NICKNAME_STORAGE_KEY = 'ox-nickname-v1';
 let serverTimeOffset = 0;
@@ -331,6 +332,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const rawHit = hits[0].point;
     const hit = {x:rawHit.x/layoutScaleX,z:rawHit.z/layoutScaleZ};
     const pt = onStage ? screenToStage(hit.x, hit.z) : spectatorFromScene(rawHit.x,rawHit.z);
+    if(raceActive&&onStage){
+      const dest=pt.z<=-1.4?{x:Math.max(-8.8,Math.min(8.8,pt.x)),z:Math.max(-4.9,Math.min(-1.6,pt.z))}:{x:Math.max(-1.4,Math.min(1.4,pt.x)),z:Math.max(-1.6,Math.min(6,pt.z))};
+      myMoveTarget=(myPos.z>-1.4&&Math.abs(dest.x)>1.65||Math.abs(myPos.x)>1.65&&dest.z>-1.4)?{x:0,z:-3,after:dest}:dest;return;
+    }
     const minZ = onStage ? STAGE_MIN_Z + .8 : SPECTATOR_MIN_Z;
     const maxZ = onStage ? STAGE_MAX_Z - .8 : SPECTATOR_MAX_Z;
     const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
@@ -407,6 +412,29 @@ function spectatorToScene(x,z) { return {x:x*layoutScaleX,z:spectatorSceneStart(
 function spectatorFromScene(x,z) { return {x:x/layoutScaleX,z:SPECTATOR_MIN_Z+(z-spectatorSceneStart())/.7}; }
 // All devices share one wide board and the same left/right answer directions.
 function stageToScreen(x,z) { return {x,z}; }
+function syncRaceScene(){
+ const enabled=roomState?.currentQuestion?.type==='RACE'&&['PREPARING','QUESTION','JUDGE'].includes(roomState.state);
+ if(enabled&&!raceScene)raceScene=RaceScene.create(scene,STAGE_HEIGHT);
+ if(enabled!==raceActive){raceActive=enabled;cameraFrame=null;cameraFollow.initialized=false;raceScene?.reset();if(!enabled)raceOwn=null;}
+ if(raceScene)raceScene.root.visible=enabled;
+ worldGroup.visible=!enabled;spectatorStrip.visible=!enabled;
+ for(const zone of [zoneO,zoneX,lane1,lane2,lane3,lane4])zone.symbolMesh.visible=!enabled&&zone.group.parent.visible;
+ document.body.classList.toggle('race-mode',enabled);
+ document.getElementById('race-feedback').hidden=!enabled;
+}
+function renderRaceInfo(){
+ if(!raceActive)return;const q=roomState.currentQuestion,own=raceOwn?.roundId===roomState.roundId?raceOwn:null;
+ document.getElementById('q-type-sub').textContent=`OX 레이스 · ${own?.progress||0}/${q.raceTotal}`;
+ document.getElementById('q-main-text').textContent=roomState.state==='JUDGE'?(roomState.raceRetry?'완주자가 없어 다시 도전해요!':`레이스 종료! 완주 ${own?.finishedCount||0}명 통과`):roomState.state==='PREPARING'?'왼쪽 O · 오른쪽 X — 곧 출발해요!':own?.rank?`${own.rank}등 완주!`:(own?.participant?own.question:'레이스 참가자를 기다리는 중…');
+ document.getElementById('race-feedback').textContent=`선착순 ${own?.finishedCount||0}/${q.raceQuota}명 · ${own?.notice||'T자 길을 따라가세요 · 오답은 재도전'}`;
+}
+function receiveRaceState(msg){
+ if(msg.roomId!==currentRoomId||msg.gameId!==roomState?.gameId||msg.roundId!==roomState?.roundId||roomState?.currentQuestion?.type!=='RACE')return;
+ if(raceOwn?.roundId===msg.roundId&&msg.seq<raceOwn.seq)return;
+ const reset=!raceOwn||raceOwn.roundId!==msg.roundId||msg.seq>raceOwn.seq;raceOwn=msg;
+ if(reset&&msg.participant){myPos={x:msg.x,z:msg.z};myMoveTarget=null;lastSentPosKey='';const entity=playerEntities.get(myClientId);if(entity){entity.x=entity.targetX=msg.x;entity.z=entity.targetZ=msg.z;entity.motion.teleporting=true;}raceScene?.reset();}
+ renderRaceInfo();updateQuestionReadability();
+}
 function screenToStage(x,z) { return {x,z}; }
 function fitStageCamera(w,h){
   camera.aspect=w/h;camera.clearViewOffset();camera.updateProjectionMatrix();
@@ -440,6 +468,7 @@ function fitStageCamera(w,h){
   updateFollowCamera(0,true);
 }
 function updateFollowCamera(dt,restore=false){
+  if(raceActive){const self=playerEntities.get(myClientId),target=self?.eligible===false?playerEntities.get(spectatorTargetId):self;raceScene.camera(camera,target,dt);return;}
   if(!cameraFollow.enabled){cameraFollow.x=0;cameraFollow.targetX=0;camera.position.x=0;camera.updateMatrixWorld(true);return;}
   const self=currentRoomId?playerEntities.get(myClientId):null;
   const mine=self?.eligible===false?playerEntities.get(spectatorTargetId):self;
@@ -473,8 +502,9 @@ function updateCameraForScreen() {
   const w=container.clientWidth||window.innerWidth,h=container.clientHeight||window.innerHeight;
   const portrait=portraitScreen();
   layoutScaleX=1.4;layoutScaleZ=1.3;
+  if(raceActive){layoutScaleX=layoutScaleZ=1;camera.aspect=w/h;camera.updateProjectionMatrix();}
   const frameKey=`${innerWidth}:${innerHeight}:${currentRoomId||'lobby'}`;
-  if(!cameraFrame||cameraFrame.key!==frameKey){
+  if(raceActive){cameraFrame=null;updateFollowCamera(0);}else if(!cameraFrame||cameraFrame.key!==frameKey){
     fitStageCamera(w,h);cameraFrame={key:frameKey,width:w,height:h,offsetY:camera.view?.offsetY||0};
   }else{
     // Crop the header from the same camera field; changing question height must
@@ -487,14 +517,14 @@ function updateCameraForScreen() {
   ShowHost.layoutBackdrop(hostBackdrop,window.matchMedia('(pointer:coarse)').matches||innerWidth<=680);
   // Always frame the outside spectator walkway, even before anyone is eliminated.
   spectatorStrip.scale.x=layoutScaleX;
-  spectatorStrip.visible=true;
+  spectatorStrip.visible=!raceActive;
   spectatorStrip.position.set(0,.02,spectatorSceneStart()+.42);
   worldGroup.updateMatrixWorld(true);
   const focal=h/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
   for(const zone of [zoneO,zoneX,lane1,lane2,lane3,lane4]){
     const mark=zone.symbolMesh;if(!mark)continue;
     const position=zone.group.getWorldPosition(new THREE.Vector3());
-    mark.position.set(position.x,STAGE_HEIGHT+.09,position.z);mark.visible=zone.group.parent.visible;
+    mark.position.set(position.x,STAGE_HEIGHT+.09,position.z);mark.visible=!raceActive&&zone.group.parent.visible;
     const distance=-mark.position.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const isOX=zone===zoneO||zone===zoneX;
     const desiredPixels=Math.min(isOX?(portrait?85:120):(portrait?64:90),w*.24,h*.24);
@@ -699,6 +729,7 @@ function computeOverheadBadge(entity) {
     return { text: entity.alive?'생존 · 대기':'유령', theme: 'GHOST' };
   }
   if(state==='BREAK')return {text:'휴식',theme:'MINORITY'};
+  if(q?.type==='RACE')return {text:entity.raceRank?`${entity.raceRank}등 완주`:`${entity.raceProgress||0}/${q.raceTotal} 완료`,theme:'MINORITY'};
   if(q?.type==='MINORITY')return {text:entity.zoneId==='LEFT'?'왼쪽':'오른쪽',theme:'MINORITY'};
 
   // 무대 위 참가자인 경우
@@ -836,7 +867,6 @@ function animate(frameTime) {
   if(!framePacing.accept(frameTime))return;
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
-  avatarViewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);avatarFrustum.setFromProjectionMatrix(avatarViewProjection);
   const joystickEnabled=portraitScreen()&&canMove();
   joystickRoot.classList.toggle('hidden',!joystickEnabled);
   if(!joystickEnabled&&(joystick.pointerId!==null||joystick.x||joystick.z))resetJoystick();
@@ -844,6 +874,7 @@ function animate(frameTime) {
   // 1) 내 캐릭터 이동 처리 (입력창 포커스 중에는 키보드 이동 중지)
   if (canMove()) {
     const myEntity = playerEntities.get(myClientId);
+    const beforeMove={...myPos};
     const minZ = myEntity && !myEntity.onStage ? SPECTATOR_MIN_Z : STAGE_MIN_Z + .8;
     const maxZ = myEntity && !myEntity.onStage ? SPECTATOR_MAX_Z : STAGE_MAX_Z - .8;
 
@@ -873,13 +904,14 @@ function animate(frameTime) {
         myPos.x += (dx / dist) * step;
         myPos.z += (dz / dist) * step;
       } else {
-        myMoveTarget = null;
+        myMoveTarget = myMoveTarget.after||null;
       }
     }
 
     const movementHalfW = myEntity?.onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
     myPos.x = Math.max(-movementHalfW, Math.min(movementHalfW, myPos.x));
     myPos.z = Math.max(minZ, Math.min(maxZ, myPos.z));
+    if(raceActive&&myEntity?.onStage)myPos=RaceRules.move(beforeMove,myPos);
 
     if (ws && ws.readyState === WebSocket.OPEN && now - lastSentPosTime > 55) {
       lastSentPosTime = now;
@@ -887,7 +919,7 @@ function animate(frameTime) {
       const positionKey = `${myEntity?.onStage}:${myPos.x.toFixed(2)}:${myPos.z.toFixed(2)}`;
       if(positionKey !== lastSentPosKey){
         lastSentPosKey = positionKey;
-        ws.send(JSON.stringify({ type: 'MOVE', x: myPos.x, z: myPos.z }));
+        ws.send(JSON.stringify({ type: 'MOVE', x: myPos.x, z: myPos.z,...(raceActive?answerContext():{}) }));
       }
     }
 
@@ -909,6 +941,7 @@ function animate(frameTime) {
   }
 
   updateFollowCamera(dt);
+  avatarViewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);avatarFrustum.setFromProjectionMatrix(avatarViewProjection);
   // 2) 모든 캐릭터 위치 보간 및 금빛 링 애니메이션
   const viewWidth = container.clientWidth, viewHeight = container.clientHeight;
   for (const entity of playerEntities.values()) {
@@ -998,9 +1031,9 @@ function animate(frameTime) {
     plat.group.position.y += (plat.targetY - plat.group.position.y) * 0.14;
   }
 
-  podiumGroup.visible=!!currentRoomId;
-  hostSpeechBubble.style.visibility=currentRoomId?'visible':'hidden';
-  if(currentRoomId){
+  podiumGroup.visible=!!currentRoomId&&!raceActive;
+  hostSpeechBubble.style.visibility=currentRoomId&&!raceActive?'visible':'hidden';
+  if(currentRoomId&&!raceActive){
     ShowHost.update(hostSprite,now,roomState?.state);
     podiumGroup.updateMatrixWorld(true);
     hostSpeechAnchor.set(0,4.25,-.3).applyMatrix4(podiumGroup.matrixWorld).project(camera);
@@ -1077,10 +1110,12 @@ function connectWebSocket() {
       case 'NOTICE':setQuizStatus(msg.message);break;
       case 'MOVE_CORRECTION':{
         if(msg.roomId!==currentRoomId)break;
+        if(msg.roundId&&msg.roundId!==roomState?.roundId)break;
         myPos={x:msg.x,z:msg.z};myMoveTarget=null;
         lastSentPosKey='';
         break;
       }
+      case 'RACE_STATE':receiveRaceState(msg);break;
       case 'ROOM_STATE': {
         if(msg.roomId!==currentRoomId)break;
         roomState = msg;
@@ -1197,6 +1232,8 @@ function handleWorldTick(compactList) {
     const roleChanged = entity.onStage !== Boolean(p.st);
     if(roleChanged||Math.hypot(p.x-entity.x,p.z-entity.z)>8)entity.motion.teleporting=true;
     entity.alive = Boolean(p.a);
+    entity.raceProgress=p.rp||0;entity.raceRank=p.rk||0;
+    if(raceActive&&p.i!==myClientId&&Math.hypot(p.x-entity.x,p.z-entity.z)>6){entity.x=p.x;entity.z=p.z;}
     entity.eligible=p.el!==0;entity.connected=p.c!==0;
     entity.onStage = Boolean(p.st);
     entity.targetY = p.st ? STAGE_HEIGHT : 0;
@@ -1423,6 +1460,7 @@ function handleRoomStateUpdate(stateMsg) {
   document.querySelectorAll('#short-answer-panel input, #short-answer-panel button, .multi-pick-btn').forEach(el => el.disabled = !answering || !eligible);
   if (phaseChanged) myMoveTarget = null;
   updateQuestionReadability();
+  syncRaceScene();renderRaceInfo();
   requestAnimationFrame(updateCameraForScreen);
   renderedPhaseKey=phaseKey;
   for (const ent of playerEntities.values()) {
@@ -1515,7 +1553,7 @@ function canMove() {
   if (['WAITING','BREAK'].includes(roomState?.state)) return true;
   if (roomState?.state !== 'QUESTION' || Date.now() - serverTimeOffset >= roomState.stateEndTime) return false;
   const q = roomState.currentQuestion, mine = playerEntities.get(myClientId);
-  return !!mine && (!mine.onStage || q.type === 'OX' || q.type==='MINORITY' || q.type === 'MULTIPLE' && q.inputMode === 'MOVE');
+  return !!mine && (!mine.onStage || q.type==='RACE'&&!raceOwn?.rank&&raceOwn?.participant || q.type === 'OX' || q.type==='MINORITY' || q.type === 'MULTIPLE' && q.inputMode === 'MOVE');
 }
 
 window.submitShortAnswer = function () {
@@ -1589,6 +1627,7 @@ function returnToLobby({preserveResume=false}={}){
  resetJoystick();
  closeChatPopup();
  currentRoomId=null;roomState=null;renderedPhaseKey=null;myMoveTarget=null;
+ raceOwn=null;syncRaceScene();
  worldUpdates.reset();roomStateSync.reset();
  lastSentPosKey='';lastSentPosTime=0;
  document.body.classList.remove('answer-mode','multiple-mode','move-answer-mode','break-mode');

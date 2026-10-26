@@ -15,13 +15,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
-  <link rel="stylesheet" href="./style.css?v=38" />
+  <link rel="stylesheet" href="./style.css?v=39" />
   <link rel="stylesheet" href="./spectator.css?v=2" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
   <!-- 3D / 2.5D 파스텔 스튜디오 캔버스 -->
-  <div id="canvas-container"><div id="host-speech-bubble" class="host-speech-bubble" role="status" aria-label="사회자 안내">준비되면 게임을 시작해 주세요!</div></div>
+  <div id="canvas-container"><div id="host-speech-bubble" class="host-speech-bubble" role="status" aria-label="사회자 안내">준비되면 게임을 시작해 주세요!</div><div id="race-feedback" role="status" hidden></div></div>
 
   <!-- ==================== 1. 로비 & 방 만들기 오버레이 ==================== -->
   <div id="lobby-overlay" class="overlay">
@@ -407,8 +407,10 @@
   <script src="./instancedAvatars.js?v=3"></script>
   <script src="./avatars.js?v=20"></script>
   <script src="./avatarPicker.js?v=15"></script>
-  <script src="./quizLimits.js?v=1"></script>
-  <script src="./quizBuilder.js?v=17"></script>
+  <script src="./quizLimits.js?v=2"></script>
+  <script src="./raceRules.js?v=1"></script>
+  <script src="./raceScene.js?v=1"></script>
+  <script src="./quizBuilder.js?v=18"></script>
   <script src="./resultNotifications.js?v=1"></script>
   <script src="./mobileCrowd.js?v=4"></script>
   <script src="./framePacing.js?v=1"></script>
@@ -421,7 +423,7 @@
   <script src="./roomStateSync.js?v=1"></script>
   <script src="./arenaRules.js?v=1"></script>
   <script src="./spectatorView.js?v=1"></script>
-  <script src="./app.js?v=71"></script>
+  <script src="./app.js?v=72"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

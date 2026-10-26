@@ -67,7 +67,7 @@ function validatePlayable(questions){
  if(!Array.isArray(questions)||!questions.length)throw new Error('문제를 한 개 이상 작성해 주세요.');
  for(let i=0;i<questions.length;i++){
   const q=questions[i];
-  if(!q.question.trim()||(q.type!=='MINORITY'&&!q.answer.trim())||(q.type==='SHORT'&&!q.answer.split(',').some(a=>a.trim()))||(q.type==='MULTIPLE'&&q.choices.some(c=>!c.trim())))throw new Error(`문제 ${i+1}의 내용·정답·보기를 완성해 주세요. 임시 저장은 미완성 상태에서도 가능해요.`);
+  if(!q.question.trim()||(!['MINORITY','RACE'].includes(q.type)&&!q.answer.trim())||(q.type==='RACE'&&q.raceQuestions.some(item=>!item.question.trim()))||(q.type==='SHORT'&&!q.answer.split(',').some(a=>a.trim()))||(q.type==='MULTIPLE'&&q.choices.some(c=>!c.trim())))throw new Error(`문제 ${i+1}의 내용·정답·보기를 완성해 주세요. 임시 저장은 미완성 상태에서도 가능해요.`);
  }
 }
 function resumeHash(token){return typeof token==='string'&&/^[a-f0-9]{64}$/.test(token)?crypto.createHash('sha256').update(token).digest('hex'):null;}
@@ -132,7 +132,7 @@ wss.on('connection',ws=>{
  }
  function issueSession(player){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token);}
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
- send(ws,{type:'WELCOME',clientId,features:{minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
+ send(ws,{type:'WELCOME',clientId,features:{race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',raw=>{
   if(!limits.allow('all',60,120))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -221,8 +221,9 @@ wss.on('connection',ws=>{
     }
     case 'LEAVE_ROOM':leave();send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
     case 'MOVE':if(currentRoom&&typeof msg.x==='number'&&typeof msg.z==='number'){
+     if(currentRoom.getCurrentQuestion()?.type==='RACE'&&currentRoom.state==='QUESTION'&&!matchesRound(msg))break;
      const moved=currentRoom.movePlayer(clientId,Number(msg.x),Number(msg.z),{enforceSpeed:true});
-     if(moved===false){const p=currentRoom.players.get(clientId);send(ws,{type:'MOVE_CORRECTION',roomId:currentRoom.id,x:p.x,z:p.z});}
+     if(moved===false){const p=currentRoom.players.get(clientId);send(ws,{type:'MOVE_CORRECTION',roomId:currentRoom.id,gameId:currentRoom.gameId,roundId:currentRoom.roundId,x:p.x,z:p.z});}
     }break;
     case 'CHAT': {
      currentRoom?.chat(clientId,msg.text);break;

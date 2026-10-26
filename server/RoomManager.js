@@ -3,6 +3,8 @@ const AvatarCatalog=require('../client/avatarCatalog');
 const QuizLimits=require('../client/quizLimits');
 const {WorldStream}=require('./WorldStream');
 const ArenaRules=require('../client/arenaRules');
+const RaceRules=require('../client/raceRules');
+const {RaceRound}=require('./RaceRound');
 
 // Answer stage and lower spectator floor use separate bounds.
 const ARENA_HALF_W = 10; // X: -10 ~ +10
@@ -82,15 +84,16 @@ class Room {
     this.questions = Array.isArray(options.questions) && options.questions.length > 0
       ? options.questions.map((q, idx) => ({
           index: idx,
-          type: ['OX', 'MULTIPLE', 'SHORT', 'MINORITY'].includes(q.type) ? q.type : 'OX',
+          type: ['OX', 'MULTIPLE', 'SHORT', 'MINORITY','RACE'].includes(q.type) ? q.type : 'OX',
           isRevival: Boolean(q.isRevival),
           inputMode: q.inputMode === 'MOVE' ? 'MOVE' : 'BUTTON',
           ignoreSpaces: q.ignoreSpaces !== false,
           caseSensitive: q.caseSensitive === true,
           question: String(q.question || `${idx + 1}번 문제`),
-          answer: q.type==='MINORITY'?'':String(q.answer || 'O').trim(),
+          answer: ['MINORITY','RACE'].includes(q.type)?'':String(q.answer || 'O').trim(),
+          ...(q.type==='RACE'?{raceQuestions:Array.isArray(q.raceQuestions)?q.raceQuestions.map(item=>({question:String(item?.question||''),answer:String(item?.answer||'').toUpperCase()})):[]} :{}),
           choices: Array.isArray(q.choices) ? q.choices.slice(0, 4).map(c => String(c)) : ['1번', '2번', '3번', '4번'],
-          timeLimit: clamp(parseInt(q.timeLimit, 10) || 12, 5, 60)
+          timeLimit: clamp(parseInt(q.timeLimit, 10) || (q.type==='RACE'?120:12), 5, q.type==='RACE'?300:60)
         }))
       : JSON.parse(JSON.stringify(DEFAULT_QUIZ_LIST));
 
@@ -101,6 +104,7 @@ class Room {
     this.nextSpawnSlot = 0;
     this.roundParticipants = new Set();
     this.minorityOutcome=null;
+    this.race=null;
 
     // WAITING | COUNTDOWN | PREPARING | QUESTION | JUDGE | BREAK | LOTTERY | ENDED
     this.state = 'WAITING';
@@ -282,6 +286,7 @@ class Room {
   nextQuestion({skipPreparation=false}={}) {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
+    this.race=null;
     this.currentQuestionIndex++;
     this.roundId=crypto.randomUUID();
 
@@ -316,10 +321,14 @@ class Room {
       p.lastResult = null;
     }
 
+    if(q.type==='RACE')this.race=new RaceRound(this,q);
     const durationMs = q.timeLimit * 1000;
     this.stateEndTime = Date.now() + 1400;
 
-    if(q.type==='MINORITY'){
+    if(q.type==='RACE'){
+      this.hostSpeech='T자 길에서 왼쪽 O · 오른쪽 X를 고르세요! 오답은 출발점에서 다시 도전해요.';
+      this.lastNotice=`OX ${q.raceQuestions.length}문제 완주 · 선착순 ${this.race.quota}명 통과`;
+    }else if(q.type==='MINORITY'){
       this.hostSpeech=q.isRevival?'유령끼리 인원이 적은 구역을 고르세요! 동수면 무작위로 결정해요.':'인원이 적은 구역으로 이동하세요! 동수면 무작위로 결정해요.';
       this.lastNotice=q.isRevival?'소수결 부활전 · 유령만 집계 / 생존자 관전':'소수결 · 적은 쪽 승리 / 동수면 무작위';
     } else if (q.isRevival) {
@@ -367,11 +376,12 @@ class Room {
       this.minorityOutcome={leftCount,rightCount,tie,winningZone};
       correctAnswer=winningZone;
     }
-    const answerIntro=q.type==='MINORITY'
+    const answerIntro=q.type==='RACE'?`OX 레이스 완주 ${this.race.liveFinishers().length}명!`:q.type==='MINORITY'
       ? `${correctAnswer==='LEFT'?'왼쪽':'오른쪽'} 승리! 왼쪽 ${this.minorityOutcome.leftCount}명 · 오른쪽 ${this.minorityOutcome.rightCount}명${this.minorityOutcome.tie?' · 동수 무작위 결정':''}.`
       : `정답은 [${correctAnswer}]!`;
 
     const isPlayerCorrect = (p) => {
+      if(q.type==='RACE')return this.race?.passed(p.id)||false;
       if(q.type==='MINORITY')return computeZone('MINORITY',p.x)===correctAnswer;
       if (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE') return p.hasSubmitted && p.submittedText === q.answer;
       if (q.type === 'OX' || q.type === 'MULTIPLE') {
@@ -387,6 +397,10 @@ class Room {
       }
       return false;
     };
+    if(q.type==='RACE'&&!this.race.liveFinishers().length){
+      this.hostSpeech='완주자가 없어 같은 레이스를 다시 시작합니다!';this.lastNotice='완주자 0명 · 탈락 없이 재도전';
+      this.broadcastRoomEvent({raceRetry:true});this.timerHandle=setTimeout(()=>{this.currentQuestionIndex--;this.nextQuestion();},JUDGE_DURATION_MS);return;
+    }
 
     if (q.isRevival) {
       // 패자부활전: 유령 참가자의 인원으로 조기 종료를 판정하지 않고, 부활 결과를 반영한 실제 생존 인원 기준으로 판단
@@ -472,7 +486,7 @@ class Room {
 
     const aliveNowCount = this.getAlivePlayers().length;
     this.hostSpeech = `${answerIntro} 현재 생존자 ${aliveNowCount}명입니다!`;
-    this.lastNotice = `${q.type==='MINORITY'?answerIntro:`정답 [${q.answer}]`} · 생존 ${aliveNowCount}명 / 탈락 ${eliminatedCount}명`;
+    this.lastNotice = `${['MINORITY','RACE'].includes(q.type)?answerIntro:`정답 [${q.answer}]`} · 생존 ${aliveNowCount}명 / 탈락 ${eliminatedCount}명`;
 
     this.broadcastRoomEvent({
       revealAnswer: correctAnswer,
@@ -544,6 +558,7 @@ class Room {
   resetToWaiting() {
     if (this.timerHandle) clearTimeout(this.timerHandle);
     this.minorityOutcome=null;
+    this.race=null;
     this.state = 'WAITING';
     this.gameId = null;
     this.roundId=null;
@@ -576,6 +591,8 @@ class Room {
     const onStage = this.isPlayerOnStage(p);
     const q = this.getCurrentQuestion();
     if (onStage && this.state === 'QUESTION' && (q.type === 'SHORT' || (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE'))) return;
+    const racing=onStage&&this.state==='QUESTION'&&q.type==='RACE';
+    if(racing&&this.race?.runners.get(clientId)?.progress>=q.raceQuestions.length)return false;
     const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
     nx=ArenaRules.coordinate(clamp(nx,-halfW,halfW));
     nz=ArenaRules.coordinate(clamp(nz,onStage?STAGE_MIN_Z+.8:SPECTATOR_MIN_Z,onStage?STAGE_MAX_Z-.8:SPECTATOR_MAX_Z));
@@ -585,7 +602,9 @@ class Room {
       if(distance>p.moveCredit+.03)return false;
       p.moveCredit=Math.max(0,p.moveCredit-distance);
     }
-    p.x=nx;p.z=nz;return true;
+    const next=racing?RaceRules.move(p,{x:nx,z:nz}):{x:nx,z:nz};
+    p.x=next.x;p.z=next.z;if(racing)this.race.visit(p,now);
+    return Math.abs(next.x-nx)<.03&&Math.abs(next.z-nz)<.03;
   }
 
   chat(clientId,text){
@@ -627,6 +646,7 @@ class Room {
           question: q.question,
           choices: q.choices,
           timeLimit: q.timeLimit,
+          ...(q.type==='RACE'?{raceTotal:q.raceQuestions.length,raceQuota:this.race?.quota||0}:{}),
           answer: (this.state === 'JUDGE' || this.state === 'ENDED') ? (q.type==='MINORITY'?this.minorityOutcome?.winningZone:q.answer) : undefined
         }
       : null;
@@ -661,12 +681,14 @@ class Room {
 
     if(recipient){if(recipient.readyState===1)recipient.send(payload);}
     else this.sendToAll(payload);
+    if(q?.type==='RACE'&&this.race){for(const p of this.players.values())if(!recipient||p.ws===recipient)this.race.send(p);}
   }
 
   broadcastWorldTick() {
     const q = this.getCurrentQuestion();
     const revealText = this.state === 'JUDGE' || this.state === 'ENDED';
     const qType = q ? q.type : 'OX';
+    const raceRanks=new Map(qType==='RACE'?(this.race?.liveFinishers()||[]).map((id,i)=>[id,i+1]):[]);
 
     const playersCompact = [];
     for (const p of this.players.values()) {
@@ -686,7 +708,8 @@ class Room {
         zId: zone,
         h: p.hasSubmitted ? 1 : 0,
         e: p.isEditing ? 1 : 0,
-        r: p.lastResult
+        r: p.lastResult,
+        ...(qType==='RACE'?{rp:this.race?.runners.get(p.id)?.progress||0,rk:raceRanks.get(p.id)||0}: {})
       });
     }
 
