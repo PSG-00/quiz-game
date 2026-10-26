@@ -1,0 +1,6 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {QuizLoadGuard}=require('../server/QuizLoadGuard');
+const password='isolated-test-password',salt=crypto.randomBytes(16),record={salt:salt.toString('hex'),hash:crypto.scryptSync(password,salt,64).toString('hex')};
+test('비밀번호 잠금은 서버 인증 전과 만료 후 거절하고 로컬 비활성화는 기존 동작 유지',()=>{const guard=new QuizLoadGuard({record});assert.throws(()=>guard.require(0),e=>e.code==='QUIZ_LOAD_LOCKED');assert.throws(()=>guard.require(Date.now()-1));assert.doesNotThrow(()=>guard.require(Date.now()+1000));assert.doesNotThrow(()=>new QuizLoadGuard({enabled:false}).require(0));});
+test('올바른 비밀번호만 인증하며 원문 대신 scrypt 해시를 사용',async()=>{const guard=new QuizLoadGuard({record});await assert.rejects(guard.unlock('a','wrong'),/일치하지/);const until=await guard.unlock('a',password);assert.ok(until>Date.now());assert.doesNotThrow(()=>guard.require(until));});
+test('설정 누락과 과도한 비밀번호 입력은 우회하지 못함',async()=>{await assert.rejects(new QuizLoadGuard().unlock('a',password),/설정되지/);const guard=new QuizLoadGuard({record});for(let i=0;i<5;i++)await assert.rejects(guard.unlock('a',''),/일치하지/);await assert.rejects(guard.unlock('a',password),/1분/);});

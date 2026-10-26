@@ -9,6 +9,9 @@ const {RoomStore}=require('./RoomStore');
 const {QuizLibrary,userHash}=require('./QuizLibrary');
 const {cacheControl}=require('./staticCache');
 const {RequestLimits}=require('./RequestLimits');
+const {QuizLoadGuard}=require('./QuizLoadGuard');
+const passwordFile=path.join(__dirname,'quizLoadPassword.json');
+const quizLoadGuard=new QuizLoadGuard({enabled:process.env.OX_QUIZ_LOAD_LOCK==='1'||process.env.NODE_ENV==='production'&&process.env.OX_QUIZ_LOAD_LOCK!=='0',record:fs.existsSync(passwordFile)?JSON.parse(fs.readFileSync(passwordFile,'utf8')):null});
 const MAX_CONNECTIONS=Math.max(50,Number.parseInt(process.env.OX_MAX_CONNECTIONS,10)||500);
 const PORT=process.env.PORT||3000;
 const app=express();
@@ -57,7 +60,7 @@ function checkCodeLimit(address){
 app.get('/api/rooms',(req,res)=>res.json({rooms:roomManager.getRoomListSummary()}));
 app.get('/api/recovered-draft',(req,res)=>{
  const file=path.join(__dirname,'../data/recovered-browser-draft.json');
- if(disabled||process.env.OX_DATA_FILE||!fs.existsSync(file))return res.json(null);
+ if(quizLoadGuard.enabled||disabled||process.env.OX_DATA_FILE||!fs.existsSync(file))return res.json(null);
  res.json(JSON.parse(fs.readFileSync(file,'utf8')));
 });
 const server=http.createServer(app),wss=new WebSocketServer({server,maxPayload:5*1024*1024});
@@ -113,7 +116,7 @@ const heartbeatInterval=setInterval(()=>{
 heartbeatInterval.unref?.();
 wss.on('connection',ws=>{
  if(wss.clients.size>MAX_CONNECTIONS){ws.on('error',()=>{});ws.close(1013,'서버 접속 인원이 많아요. 잠시 후 다시 시도해 주세요.');return;}
- let clientId='user_'+crypto.randomBytes(6).toString('hex'),currentRoom=null,ownerHash=null;
+ let clientId='user_'+crypto.randomBytes(6).toString('hex'),currentRoom=null,ownerHash=null,quizLoadUntil=0;
  const limits=new RequestLimits();
  ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;});
  ws.detachRoom=()=>{currentRoom=null;};
@@ -132,8 +135,8 @@ wss.on('connection',ws=>{
  }
  function issueSession(player){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token);}
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
- send(ws,{type:'WELCOME',clientId,features:{race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
- ws.on('message',raw=>{
+ send(ws,{type:'WELCOME',clientId,features:{quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true},rooms:roomManager.getRoomListSummary()});
+ ws.on('message',async raw=>{
   if(!limits.allow('all',60,120))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
   if(!msg||typeof msg!=='object'||Array.isArray(msg)||typeof msg.type!=='string'){
@@ -150,8 +153,14 @@ wss.on('connection',ws=>{
      ownerHash=userHash(msg.token);ws.libraryOwnerHash=ownerHash;
      if(currentRoom){const me=currentRoom.players.get(clientId);if(me)me.ownerHash=ownerHash;}
      probeStaleOwnerSessions(ownerHash,ws);
+     quizLoadUntil=0;
      library.claimLegacy(ownerHash,msg.legacyRoomTokens);listQuizzes();break;
+    case 'UNLOCK_QUIZ_LIBRARY':
+     if(!ownerHash)throw new Error('퀴즈 보관함 연결을 기다려 주세요.');
+     quizLoadUntil=await quizLoadGuard.unlock(ws._socket.remoteAddress,msg.password);
+     send(ws,{type:'QUIZ_LIBRARY_UNLOCKED',expiresAt:quizLoadUntil,requestId:msg.requestId});break;
      case 'LIST_PUBLIC_QUIZZES':
+      quizLoadGuard.require(quizLoadUntil);
       send(ws,{type:'PUBLIC_QUIZ_LIST',quizzes:library.listPublic()});break;
     case 'LIST_QUIZZES':
      if(!ownerHash)throw new Error('퀴즈 보관함에 연결 중입니다. 잠시 후 다시 눌러 주세요.');
@@ -164,6 +173,7 @@ wss.on('connection',ws=>{
     }
     case 'LOAD_QUIZ':
      if(!ownerHash)throw new Error('퀴즈 보관함에 연결되지 않았어요.');
+     quizLoadGuard.require(quizLoadUntil);
      send(ws,{type:'QUIZ_LOADED',quiz:library.get(ownerHash,msg.quizId)});break;
     case 'DELETE_QUIZ':
      if(!ownerHash)throw new Error('퀴즈 보관함에 연결되지 않았어요.');
@@ -171,6 +181,7 @@ wss.on('connection',ws=>{
      for(const peer of wss.clients)if(peer.libraryOwnerHash===ownerHash){send(peer,{type:'QUIZ_DELETED',quizId:msg.quizId});send(peer,{type:'QUIZ_LIST',quizzes:library.list(ownerHash)});}break;
     case 'LOAD_QUIZ_BY_CODE':
      if(!ownerHash)throw new Error('퀴즈 보관함에 연결되지 않았어요.');
+     quizLoadGuard.require(quizLoadUntil);
      checkCodeLimit(ws._socket.remoteAddress);
      send(ws,{type:'QUIZ_LOADED',quiz:library.getByCode(msg.code,ownerHash),byCode:true,requestId:msg.requestId});break;
     case 'GET_ROOMS':send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
@@ -233,7 +244,7 @@ wss.on('connection',ws=>{
     case 'START_GAME':if(currentRoom?.hostId===clientId&&['WAITING','ENDED'].includes(currentRoom.state)){currentRoom.startGame();publishRooms();}break;
     case 'RESET_GAME':if(currentRoom?.hostId===clientId){currentRoom.resetToWaiting();publishRooms();}break;
    }
-  }catch(error){console.error('퀴즈/방 처리 실패:',error.message);send(ws,{type:'ERROR',message:error.message||'처리하지 못했어요. 다시 시도해 주세요.',requestId:msg.requestId});}
+  }catch(error){console.error('퀴즈/방 처리 실패:',error.message);send(ws,{type:'ERROR',code:error.code,message:error.message||'처리하지 못했어요. 다시 시도해 주세요.',requestId:msg.requestId});}
  });
  ws.on('close',()=>leave(true));
  ws.on('error',()=>leave(true));

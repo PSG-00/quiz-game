@@ -332,6 +332,17 @@
     <p class="intro-secondary">연결이 잠시 끊기면 30초 안에 복귀할 수 있어요.<br>그동안에도 문제와 서버 판정은 계속돼요.</p>
     <button onclick="this.closest('dialog').close()">알겠어요, 준비됐어요!</button>
   </dialog>
+  <dialog id="quiz-password-dialog" aria-labelledby="quiz-password-heading" oncancel="event.preventDefault();cancelQuizPassword()">
+    <h2 id="quiz-password-heading">관리자 비밀번호를 입력하세요</h2>
+    <p>문제와 정답 보호를 위해 관리자만 퀴즈를 불러올 수 있어요.</p>
+    <form onsubmit="event.preventDefault();submitQuizPassword()">
+      <label for="quiz-admin-password">관리자 비밀번호</label>
+      <input id="quiz-admin-password" type="password" autocomplete="off" maxlength="256" required>
+      <p id="quiz-password-error" role="alert"></p>
+      <button id="quiz-password-submit" class="btn btn-primary" type="submit">확인</button>
+      <button class="btn btn-ghost" type="button" onclick="cancelQuizPassword()">취소</button>
+    </form>
+  </dialog>
       <dialog id="my-quizzes-dialog" aria-labelledby="my-quizzes-heading">
     <div class="my-quizzes-heading">
       <h2 id="my-quizzes-heading">퀴즈 불러오기</h2>
@@ -366,7 +377,7 @@
       <form class="quiz-code-form" onsubmit="event.preventDefault();loadQuizByCode()">
         <label for="quiz-load-code">코드로 불러오기</label>
         <div><input id="quiz-load-code" type="text" maxlength="6" placeholder="AB7K2M" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="quiz-code-help quiz-code-message"><button id="btn-load-quiz-code" class="btn btn-primary" type="submit">불러오기</button></div>
-        <small id="quiz-code-help">같은 서버에서 발급한 6자리 코드를 입력하세요. 코드를 아는 사람은 문제와 정답을 불러올 수 있어요.</small>
+        <small id="quiz-code-help">같은 서버에서 발급한 6자리 코드를 입력하세요. 운영 서버에서는 관리자 비밀번호 확인이 필요해요.</small>
         <p id="quiz-code-message" role="status"></p>
       </form>
       <p style="font-weight:700; margin:16px 0 8px;">내가 저장한 퀴즈</p>
@@ -409,7 +420,7 @@
   <script src="./quizLimits.js?v=2"></script>
   <script src="./raceRules.js?v=2"></script>
   <script src="./raceScene.js?v=2"></script>
-  <script src="./quizBuilder.js?v=21"></script>
+  <script src="./quizBuilder.js?v=22"></script>
   <script src="./resultNotifications.js?v=1"></script>
   <script src="./mobileCrowd.js?v=4"></script>
   <script src="./framePacing.js?v=1"></script>
@@ -422,7 +433,7 @@
   <script src="./roomStateSync.js?v=1"></script>
   <script src="./arenaRules.js?v=1"></script>
   <script src="./spectatorView.js?v=1"></script>
-  <script src="./app.js?v=76"></script>
+  <script src="./app.js?v=77"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

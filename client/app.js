@@ -1075,6 +1075,7 @@ function connectWebSocket() {
       case 'QUIZ_SAVED':receiveSavedQuiz(msg);break;
       case 'QUIZ_SAVE_CONFIRM':receiveSaveConfirmation(msg);break;
       case 'QUIZ_LOADED':receiveLoadedQuiz(msg);break;
+      case 'QUIZ_LIBRARY_UNLOCKED':receiveQuizAccess(msg);break;
       case 'QUIZ_DELETED':receiveDeletedQuiz(msg.quizId);break;
       case 'ROOM_LIST': {
         renderRoomList(msg.rooms || []);
@@ -1159,6 +1160,8 @@ function connectWebSocket() {
       }
 
       case 'ERROR': {
+        if(quizAccessRequest===msg.requestId){quizAccessRequest=null;document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-error').textContent=msg.message;break;}
+        if(msg.code==='QUIZ_LOAD_LOCKED'){quizAccessUntil=0;resetCodeLoad(msg.message);setQuizStatus(msg.message);break;}
         if(pendingCodeLoad?.requestId===msg.requestId){resetCodeLoad(msg.message||'코드를 확인해 주세요.');break;}
         pendingQuizSaves.delete(msg.requestId);
         if(creatingRoomRequestId===msg.requestId)creatingRoomRequestId=null;
@@ -1173,6 +1176,7 @@ function connectWebSocket() {
   };
 
   ws.onclose = (event) => {
+    quizAccessUntil=0;cancelQuizPassword();
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
     if(event.code===4001)saveResumeSession(null);
     libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();returnToLobby({preserveResume:true});

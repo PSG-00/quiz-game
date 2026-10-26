@@ -12,6 +12,26 @@ let deletingQuizId=null;
 let overwriteRequestId=null,creatingRoomRequestId=null;
 let pendingCodeLoad=null;
 const QUIZ_DRAFT_KEY='ox-quiz-draft-v1';
+let quizAccessUntil=0,quizAccessAction=null,quizAccessRequest=null;
+function withQuizLoadAccess(action,alwaysPrompt=false){
+ if(!requireLibrary())return;
+ if(!serverFeatures.quizLoadPassword||!alwaysPrompt&&Date.now()<quizAccessUntil){action();return;}
+ quizAccessAction=action;document.getElementById('quiz-password-error').textContent='';document.getElementById('quiz-admin-password').value='';
+ const dialog=document.getElementById('quiz-password-dialog');if(!dialog.open)dialog.showModal();document.getElementById('quiz-admin-password').focus();
+}
+function submitQuizPassword(){
+ if(!requireLibrary()||quizAccessRequest)return;
+ const input=document.getElementById('quiz-admin-password');const password=input.value;input.value='';
+ if(!password){document.getElementById('quiz-password-error').textContent='비밀번호를 입력해 주세요.';return;}
+ quizAccessRequest='quiz_unlock_'+(++saveSequence);document.getElementById('quiz-password-submit').disabled=true;
+ ws.send(JSON.stringify({type:'UNLOCK_QUIZ_LIBRARY',requestId:quizAccessRequest,password}));
+}
+function receiveQuizAccess(msg){
+ if(msg.requestId!==quizAccessRequest)return;
+ quizAccessRequest=null;quizAccessUntil=msg.expiresAt;document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-dialog').close();
+ const action=quizAccessAction;quizAccessAction=null;action?.();
+}
+function cancelQuizPassword(){quizAccessAction=null;quizAccessRequest=null;document.getElementById('quiz-admin-password').value='';document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-dialog').close();}
 function setQuizStatus(text){document.getElementById('my-quiz-status').textContent=text;}
 function requireLibrary(){if(ws?.readyState!==WebSocket.OPEN||!libraryReady){setQuizStatus('서버에 연결 중입니다. 잠시 후 다시 눌러 주세요.');return false;}return true;}
 function currentQuizPayload(){return {quizId:editingQuizId,title:document.getElementById('create-room-title').value.trim(),targetWinners:Number(document.getElementById('create-target-winners').value),restSeconds:document.getElementById('create-rest-seconds').valueAsNumber,questions:JSON.parse(JSON.stringify(builderQuestions))};}
@@ -59,6 +79,7 @@ async function copyQuizCode(code,button){
 function resetCodeLoad(message=''){pendingCodeLoad=null;document.getElementById('btn-load-quiz-code').disabled=false;document.getElementById('quiz-code-message').textContent=message;}
 function loadQuizByCode(){
  if(!requireLibrary()||pendingCodeLoad)return;
+ if(serverFeatures.quizLoadPassword&&Date.now()>=quizAccessUntil){withQuizLoadAccess(loadQuizByCode);return;}
  const input=document.getElementById('quiz-load-code'),code=input.value.trim().toUpperCase();input.value=code;
  if(!/^[A-HJ-NP-Z2-9]{6}$/.test(code)){document.getElementById('quiz-code-message').textContent='영문·숫자 6자리 코드를 확인해 주세요.';return;}
  const requestId='load_code_'+(++saveSequence);pendingCodeLoad={requestId,generation:editorGeneration};
@@ -74,7 +95,8 @@ function receiveLoadedQuiz(msg){
  }
  loadMyQuiz(msg.quiz,!!msg.byCode);
 }
-function openMyQuizzes(tab = 'public') {
+function openMyQuizzes(tab = 'public') {withQuizLoadAccess(()=>showMyQuizzes(tab),true);}
+function showMyQuizzes(tab = 'public') {
   if(!requireLibrary()) return;
   if(!pendingCodeLoad) resetCodeLoad();
   document.getElementById('my-quizzes-dialog').showModal();
@@ -91,7 +113,7 @@ function renderMyQuizzes(quizzes){
   const info=document.createElement('div'),title=document.createElement('strong'),meta=document.createElement('small');
   title.textContent=quiz.title||'제목 없는 퀴즈';meta.textContent=quiz.questionCount+'문제 · 당첨 목표 '+quiz.targetWinners+'명';info.append(title,meta);
   if(quiz.code){const codeRow=document.createElement('div');codeRow.className='quiz-code-row';const code=document.createElement('strong');code.className='quiz-code-label';code.textContent=quiz.code;const copy=document.createElement('button');copy.type='button';copy.className='quiz-code-copy';copy.textContent='코드 복사';copy.onclick=()=>copyQuizCode(quiz.code,copy);codeRow.append(code,copy);info.append(codeRow);}
-  const load=document.createElement('button');load.className='btn btn-primary';load.textContent='불러오기';load.onclick=()=>ws.send(JSON.stringify({type:'LOAD_QUIZ',quizId:quiz.id}));
+  const load=document.createElement('button');load.className='btn btn-primary';load.textContent='불러오기';load.onclick=()=>withQuizLoadAccess(()=>ws.send(JSON.stringify({type:'LOAD_QUIZ',quizId:quiz.id})));
   const remove=document.createElement('button');remove.className='btn delete-quiz-button';remove.textContent='삭제';remove.setAttribute('aria-label',(quiz.title||'제목 없는 퀴즈')+' 삭제');remove.onclick=()=>requestQuizDeletion(quiz);
   const actions=document.createElement('div');actions.className='my-quiz-row-actions';actions.append(load,remove);
   row.append(info,actions);list.append(row);
@@ -305,12 +327,12 @@ function filterPublicQuizzes(query){
   const load = document.createElement('button');
   load.className = 'btn btn-primary';
   load.textContent = '불러오기';
-  load.onclick = () => {
+  load.onclick = () => withQuizLoadAccess(() => {
    if(!requireLibrary()||pendingCodeLoad)return;
    const requestId='load_code_'+(++saveSequence);
    pendingCodeLoad={requestId,generation:editorGeneration};
    ws.send(JSON.stringify({type:'LOAD_QUIZ_BY_CODE',code:quiz.code,requestId}));
-  };
+  });
   actions.append(load);
   row.append(info, actions);
   list.append(row);
