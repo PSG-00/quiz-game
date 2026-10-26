@@ -74,7 +74,7 @@ window.ShowHost=(()=>{
     if(images.has(layout))return;
     const entry={image:new Image(),loaded:false};images.set(layout,entry);
     entry.image.decoding='async';entry.image.onload=()=>{entry.loaded=true;paint(entry);};
-    entry.image.src=`./assets/stage/rescene-quiz-${layout==='mobile'?'mobile':'wide'}-v4.webp`;
+    entry.image.src=layout==='mobile'?'./assets/stage/rescene-quiz-mobile-v5.webp':'./assets/stage/rescene-quiz-wide-v4.webp';
   }
   const geometry=new T.BoxGeometry(3,2,.22),uv=geometry.attributes.uv;
   for(let i=0;i<uv.count;i++){
@@ -88,7 +88,7 @@ window.ShowHost=(()=>{
   return mesh;
  }
  function layoutBackdrop(mesh,compact){
-  const width=compact?14.4:26,height=compact?8:26/3;
+  const width=compact?21.6:26,height=compact?8:26/3;
   mesh.scale.set(width/3,height/2,1);
   mesh.position.set(0,compact?3:2.9,compact?-3:-4);
   mesh.userData.layout=compact?'mobile':'desktop';
