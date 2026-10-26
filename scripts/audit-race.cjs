@@ -24,6 +24,15 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  for(const width of [390,320]){await page.setViewportSize({width,height:844});await page.evaluate(()=>{raceOwn.question='가'.repeat(100);renderRaceInfo();updateQuestionReadability();});await sleep(250);const fit=await page.evaluate(()=>{const e=document.getElementById('q-main-text');return {width:innerWidth,scroll:e.scrollHeight,height:e.clientHeight,text:e.textContent.length};});assert.equal(fit.text,100);assert.ok(fit.scroll<=fit.height+1,JSON.stringify(fit));await page.screenshot({path:`artifacts/race-question-${width}.png`});}
  await page.setViewportSize({width:1280,height:800});
  await page.evaluate(()=>{myMoveTarget={x:0,z:RaceRules.JUNCTION_Z};});await page.waitForFunction(()=>Math.abs(myPos.z-RaceRules.JUNCTION_Z)<.15);await sleep(300);await page.screenshot({path:'artifacts/race-portals-desktop.png'});await page.setViewportSize({width:390,height:844});await sleep(300);await page.screenshot({path:'artifacts/race-portals-mobile.png'});await page.setViewportSize({width:1280,height:800});
+ const other=(await control('snapshot',{roomId})).players.find(p=>p.id!==host).id;
+ for(const width of [1280,390]){
+  await page.setViewportSize({width,height:844});await control('patch',{roomId,players:{[other]:{x:.4,z:-5.5}}});await page.waitForFunction(id=>playerEntities.get(id)?.group.visible&&playerEntities.get(id)?.nameLabel.style.visibility==='visible',other);
+  await control('patch',{roomId,players:{[other]:{x:-5,z:-9.3}}});
+  await page.waitForFunction(id=>{const e=playerEntities.get(id);return !e.group.visible&&e.nameLabel.style.visibility==='hidden'&&e.chatBubble.classList.contains('hidden')&&(!e.charSprite.userData.instancedAvatar||!e.charSprite.userData.shown);},other);
+  assert.equal(await page.evaluate(()=>playerEntities.get(myClientId).group.visible),true);
+  await control('patch',{roomId,players:{[other]:{x:.4,z:-5.5}}});await page.waitForFunction(id=>playerEntities.get(id)?.group.visible,other);
+ }
+ report.privacy='PC·모바일: 복도에서 표시, 갈림길에서 캐릭터·이름·말풍선·인스턴스 숨김, 복귀 시 재표시';
  const finished=await trip(-8.5);assert.equal(finished.progress,2);assert.equal(await page.evaluate(()=>raceOwn.rank),1);report.movement={wrong,first,finished};
  const phone=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3,serviceWorkers:'block'});phone.on('pageerror',e=>errors.push(e.message));await phone.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await phone.goto(base);await phone.waitForFunction(()=>libraryReady);await phone.evaluate(roomId=>ws.send(JSON.stringify({type:'JOIN_ROOM',roomId,nickname:'관전자',worldDelta:true})),roomId);await phone.waitForFunction(()=>raceActive&&raceOwn&&!raceOwn.participant);
  assert.equal(await phone.evaluate(()=>raceOwn.quota),2);report.lateSpectator='중도 입장자는 참가 불가·정원 불변';

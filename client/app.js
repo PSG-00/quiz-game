@@ -975,7 +975,11 @@ function animate(frameTime) {
     entity.charSprite.rotation.y=entity.motion.heading;
     entity.group.position.set(viewPosition.x, entity.y, viewPosition.z);
     avatarSphere.center.copy(entity.group.position);avatarSphere.center.y+=1.5;
-    const inView=entity.id===myClientId||avatarFrustum.intersectsSphere(avatarSphere);entity.group.visible=inView;
+    // Conceal runners before the fork so their O/X choice cannot be followed.
+    // Keep the local avatar (or the spectator's followed runner) visible.
+    const raceViewId=playerEntities.get(myClientId)?.eligible===false?spectatorTargetId:myClientId;
+    const raceConcealed=raceActive&&entity.onStage&&entity.id!==raceViewId&&Math.min(entity.z,entity.targetZ)<=RaceRules.FRONT_Z+.4;
+    const inView=!raceConcealed&&(entity.id===myClientId||avatarFrustum.intersectsSphere(avatarSphere));entity.group.visible=inView;
     if(!inView){if(entity.lowDetail)MobileCrowd.hide(entity.charSprite);else if(entity.charSprite.userData.instancedAvatar)InstancedAvatars.hide(entity.charSprite);entity.nameLabel.style.visibility='hidden';entity.chatBubble.classList.add('hidden');continue;}
     if(entity.lowDetail){entity.charSprite.rotation.y=0;MobileCrowd.update(entity.charSprite,!entity.alive,entity.motion.heading,now,entity.motion);}
     else if(entity.charSprite.userData.instancedAvatar||entity.id===myClientId||now-entity.lastPose>33){window.AvatarActors.update(entity.charSprite,!entity.alive,entity.motion.blend>.02,now,entity.seed,entity.motion);entity.lastPose=now;}
