@@ -14,7 +14,7 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Shader Error'))errors.push(m.text());});
  const source=fs.readFileSync(path.join(__dirname,'../client/app.js'),'utf8').replace(/\r\n/g,'\n').replace('  if(!framePacing.accept(frameTime))return;','  if(!framePacing.accept(frameTime)||window.pauseForClarityAudit)return;');
  await page.route('**/app.js?*',r=>r.fulfill({contentType:'application/javascript',body:source}));
- await page.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await page.goto(base+'/?clarity=compare');
+ await page.addInitScript(()=>sessionStorage.setItem('ox-rules-seen','1'));await page.goto(base);
  await page.waitForFunction(()=>libraryReady&&Object.values(AvatarModels).every(m=>m.loaded),{}, {timeout:120000});
  await page.evaluate(()=>ws.send(JSON.stringify({type:'CREATE_ROOM',nickname:'선명도 비교',title:'선명도 검증',questions:[{type:'OX',question:'선명도 비교',answer:'O',timeLimit:15}]})));
  await page.waitForFunction(()=>currentRoomId&&playerEntities.size===1&&hostBackdrop.userData.imageLoaded);await sleep(3000);
@@ -24,14 +24,14 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
   const gl=renderer.getContext(),original=renderer.setRenderTarget.bind(renderer);let sceneBits=0;
   original(null);const canvasBits=gl.getParameter(gl.DEPTH_BITS);
   renderer.setRenderTarget=t=>{original(t);if(t)sceneBits=gl.getParameter(gl.DEPTH_BITS);};
-  try{sceneClarity.render(scene,camera);}finally{renderer.setRenderTarget=original;}
+  try{sceneClarity.setMode('sharpen');sceneClarity.render(scene,camera);}finally{renderer.setRenderTarget=original;}
   return {canvasBits,sceneBits};
  });
  console.log('Depth precision:',report.depth);
  assert.ok(report.depth.sceneBits>=report.depth.canvasBits,JSON.stringify(report.depth));
  for(const mode of ['off','sharpen','upscale']){
   const result=await page.evaluate(mode=>{
-   sceneClarity.setMode(mode);sceneClarity.render(scene,camera);updateClarityButton();
+   sceneClarity.setMode(mode);sceneClarity.render(scene,camera);
    return {...sceneClarity.stats(),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,png:renderer.domElement.toDataURL('image/png')};
   },mode);
   assert.equal(result.mode,mode);assert.equal(result.failed,false);assert.equal(result.targetCount,mode==='off'?0:1);
@@ -40,12 +40,7 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
   fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync(`artifacts/clarity-${mode}${suffix}.png`,Buffer.from(result.png.split(',')[1],'base64'));delete result.png;report.modes.push(result);
  }
  assert.equal(report.modes[1].calls,report.modes[0].calls+1);assert.equal(report.modes[1].triangles,report.modes[0].triangles+1);
- report.controls=[];
- for(const expected of ['off','sharpen','upscale']){
-  await page.locator('#clarity-toggle').click();
-  assert.equal(await page.evaluate(()=>sceneClarity.stats().mode),expected);
-  report.controls.push(await page.locator('#clarity-toggle').textContent());
- }
+ assert.equal(await page.locator('#clarity-toggle').count(),0);
  report.lifecycle=await page.evaluate(()=>{
   const counts=[];for(let i=0;i<12;i++){sceneClarity.setMode(i%2?'off':'sharpen');sceneClarity.render(scene,camera);counts.push(renderer.info.memory.textures);}
   sceneClarity.setMode('off');return {counts,targets:sceneClarity.stats().targetCount};
@@ -82,9 +77,9 @@ const control=(command,data={})=>new Promise((resolve,reject)=>{const id=++seria
  report.fallback=await page.evaluate(()=>{
   const original=renderer.setRenderTarget.bind(renderer);let injected=false;
   renderer.setRenderTarget=target=>{if(target&&!injected){injected=true;throw Error('Injected render-target failure');}return original(target);};
-  try{sceneClarity.setMode('sharpen');sceneClarity.render(scene,camera);return {...sceneClarity.stats(),buttonDisabled:document.getElementById('clarity-toggle').disabled};}
+  try{sceneClarity.setMode('sharpen');sceneClarity.render(scene,camera);return sceneClarity.stats();}
   finally{renderer.setRenderTarget=original;}
  });
- assert.equal(report.fallback.mode,'off');assert.equal(report.fallback.failed,true);assert.equal(report.fallback.targetCount,0);assert.equal(report.fallback.buttonDisabled,true);
+ assert.equal(report.fallback.mode,'off');assert.equal(report.fallback.failed,true);assert.equal(report.fallback.targetCount,0);
  fs.writeFileSync(`artifacts/clarity-audit${suffix}.json`,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{if(browser)await browser.close();if(child)child.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

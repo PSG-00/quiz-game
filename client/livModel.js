@@ -1,7 +1,7 @@
 /* Actual Blender GLB, loaded once and shared by all Liv instances. */
 function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
- // Opt-in asset comparison; keep original model URLs and normal rendering intact.
- const variant=new URLSearchParams(location.search).get('model'),compact=['compact','atlas'].includes(variant);
+ // Use the approved atlas models by default; explicit variants remain for audits.
+ const variant=new URLSearchParams(location.search).get('model')||'atlas',compact=['compact','atlas'].includes(variant);
  if(compact){const suffix=variant==='atlas'?'-atlas-v1':'-compact-v1';asset=asset.replace(/\.glb$/,suffix+'.glb');version+=suffix;}
  let template=null,error=null;
  const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,175,175,175,228,228,228,255,255,255]),4,1,THREE.RGBFormat);

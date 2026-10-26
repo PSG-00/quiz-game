@@ -6,7 +6,8 @@
   maxPixels,
   pixelRatio(width,height,dpr=1){
    const query=typeof location!=='undefined'?new URLSearchParams(location.search):null;
-   const compact=['compact','atlas'].includes(query?.get('model')),crisp=compact&&query?.get('quality')==='crisp',ultra=compact&&query?.get('quality')==='ultra';
+   const variant=query?.get('model')||'atlas',quality=query?.get('quality')||(variant==='atlas'?'ultra':null);
+   const compact=['compact','atlas'].includes(variant),crisp=compact&&quality==='crisp',ultra=compact&&quality==='ultra';
    // Separate A/B option: +20% pixel work, with no sharpening/MSAA pass.
    const gain=ultra?Math.sqrt(1.5):crisp?Math.sqrt(1.2):1;
    return Math.min(2*clarityScale*gain,Math.max(.1,dpr||1)*clarityScale*gain,Math.sqrt(maxPixels*gain*gain/Math.max(1,width*height)));

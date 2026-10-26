@@ -1,5 +1,9 @@
 # Prepared atlas models, 50% render pixels, PC FXAA
 
+## Approved defaults (2026-10-26)
+
+On `codex/ox-race-20261026`, a plain URL now selects atlas models and the same +50% render-pixel budget previously requested with `model=atlas&quality=ultra`. PC enables FXAA by default; coarse-pointer/small-touch devices render directly with no postprocess target. The quality comparison button has been removed; FPS is the only rendering-status overlay on either device. Explicit model/quality parameters remain available for audits, with `aa=off` as the PC FXAA opt-out. Earlier experiment notes below describe the original opt-in comparison.
+
 Branch: codex/avatar-atlas-50p-20261026. Baseline compact models remain on codex/model-compact-20261026 (b11f0cc). Original and compact assets are retained. No server/game-rule code changes.
 
 ## Comparison URLs
