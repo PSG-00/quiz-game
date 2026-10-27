@@ -907,9 +907,11 @@ class Room {
     const q=room.getCurrentQuestion();
     if(q?.type==='RACE'&&data.race)room.race=RaceRound.restore(room,q,data.race);
     if(TIMED_STATES.includes(room.state)){
-      const delay=Math.max(0,Number(data.remainingMs)||0)+RESTORE_EXTENSION_MS,pending=data.pending||room.inferPending();
-      room.stateEndTime=now+delay;
-      if(pending)room.schedule(pending.action,delay,pending);
+      const remaining=Math.max(0,Number(data.remainingMs)||0),pending=data.pending||room.inferPending();
+      // A question whose deadline had already passed stays closed: only its judgement is left,
+      // and answers or moves after the deadline must not count. Everything else gets 5 s more.
+      if(room.state==='QUESTION'&&remaining===0){room.stateEndTime=now;if(pending)room.schedule(pending.action,2000,pending);}
+      else{const delay=remaining+RESTORE_EXTENSION_MS;room.stateEndTime=now+delay;if(pending)room.schedule(pending.action,delay,pending);}
     }
     return room;
   }

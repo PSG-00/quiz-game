@@ -116,6 +116,17 @@ test('단계 실패 되돌림: 판정이 실패해도 지난 마감이 다시 �
  }
 });
 
+test('재시작 복원: 마감이 지나 판정만 남은 문제는 다시 열지 않음(남은 시간이 있으면 +5초)',t=>{
+ const r=playing(t);clearTimeout(r.timerHandle);r.submitAnswer('a','서울');
+ const now=Date.now();r.stateEndTime=now-50;
+ const closed=Room.restore(JSON.parse(JSON.stringify(r.snapshot(now))),{now});cleanup(t,closed);clearTimeout(closed.timerHandle);
+ assert.equal(closed.state,'QUESTION');assert.ok(closed.stateEndTime<=now,'마감 닫힘 유지');assert.equal(closed.pending.action,'judge');
+ closed.submitAnswer('b','서울');assert.equal(closed.players.get('b').hasSubmitted,false,'마감 뒤 답안 거절');
+ closed.runPending();clearTimeout(closed.timerHandle);assert.equal(closed.state,'JUDGE');assert.equal(closed.players.get('b').alive,false);assert.equal(closed.players.get('a').alive,true);
+ r.stateEndTime=now+3000;const open=Room.restore(JSON.parse(JSON.stringify(r.snapshot(now))),{now});cleanup(t,open);clearTimeout(open.timerHandle);
+ assert.equal(open.stateEndTime,now+3000+RESTORE_EXTENSION_MS);
+});
+
 test('단계 실패: 이미 뽑힌 추첨은 다시 뽑지 않고 그대로 확정',t=>{
  const r=new Room({title:'추첨',targetWinners:1,restSeconds:5,questions},'a');cleanup(t,r);
  for(const id of ['a','b','c'])r.addPlayer(id,id.toUpperCase());
