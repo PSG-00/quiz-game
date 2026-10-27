@@ -38,6 +38,13 @@ test('복귀 유예 경계: 직전 복귀 허용, 정확히 만료 시 복귀 �
  const late=r.addPlayer('new-a','다시 입장');assert.equal(late.eligible,false);assert.equal(late.alive,false);
 });
 
+test('자리 기한은 마지막 신호부터 30초: 서버가 늦게 알아채도 늘지 않음',t=>{
+ const r=room(t);open(r);const a=r.players.get('a');
+ r.disconnectPlayer('a',null,13000,1000);assert.equal(a.disconnectedUntil,1000+RECONNECT_GRACE_MS);
+ assert.equal(r.resumePlayer(a,null,GRACE_END-1),true);
+ r.disconnectPlayer('a',null,20000,15000);assert.equal(r.resumePlayer(a,null,15000+RECONNECT_GRACE_MS),false);
+});
+
 test('50명에 예약 자리 포함, 예약 복귀는 자리 추가 없이 처리',t=>{
  const r=room(t);for(let i=2;i<50;i++)r.addPlayer('p'+i,'참가자');open(r);
  const p=r.players.get('a');r.disconnectPlayer('a');assert.equal(r.players.size,50);assert.throws(()=>r.addPlayer('new','관전'),/50/);

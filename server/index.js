@@ -160,12 +160,17 @@ function probeStaleOwnerSessions(targetOwnerHash,activeWs){
   }
  }
 }
+// Every inbound frame (a message, or the pong a browser sends by itself even with the screen
+// off) is a sign of life. A socket silent for 10 s is dead, and its seat is held for 30 s from
+// that last sign of life rather than from the moment the server noticed.
+const PING_EVERY_MS=5000,SILENT_DEAD_MS=10000;
 const heartbeatInterval=setInterval(()=>{
+ const now=Date.now();
  for(const peer of wss.clients){
-  if(peer.isAlive===false){peer.leaveRoom?.();try{peer.terminate();}catch{}continue;}
-  peer.isAlive=false;try{peer.ping();}catch{}
+  if(now-(peer.lastSeenAt??now)>SILENT_DEAD_MS){peer.leaveRoom?.();try{peer.terminate();}catch{}continue;}
+  if(now-(peer.lastPingAt||0)>=PING_EVERY_MS){peer.lastPingAt=now;try{peer.ping();}catch{}}
  }
-},15000);
+},1000);
 heartbeatInterval.unref?.();
 // Once the direct host is on, shows how many players actually reach the VM without the detour.
 let lastPathSummary='';
@@ -180,7 +185,7 @@ wss.on('connection',(ws,req)=>{
  let clientId='user_'+crypto.randomBytes(6).toString('hex'),currentRoom=null,ownerHash=null,quizLoadUntil=0;
  const limits=new RequestLimits(),connectedAt=Date.now();
  ws.clientAddress=clientAddress(req);ws.path=socketPath(req,directSocket);
- ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;ws.lastPongAt=Date.now();});
+ ws.lastSeenAt=connectedAt;ws.on('pong',()=>{ws.lastSeenAt=ws.lastPongAt=Date.now();});
  ws.connectedAt=connectedAt;ws.inRoom=()=>Boolean(currentRoom);
  ws.detachRoom=()=>{currentRoom=null;};
  // Compact deltas and acknowledged flow control are opt-in, so cached old clients keep working.
@@ -191,7 +196,7 @@ wss.on('connection',(ws,req)=>{
   const room=currentRoom;currentRoom=null;
   // A delayed close/error from an old socket cannot detach its replacement.
   if(room.players.get(clientId)?.ws!==ws)return;
-  if(preserve)room.disconnectPlayer(clientId,()=>{roomManager.cleanupEmptyRooms();if(roomManager.getRoom(room.id))room.broadcastRoomEvent();publishRooms();});
+  if(preserve)room.disconnectPlayer(clientId,()=>{roomManager.cleanupEmptyRooms();if(roomManager.getRoom(room.id))room.broadcastRoomEvent();publishRooms();},Date.now(),ws.lastSeenAt);
   else room.removePlayer(clientId);
   if(room.players.size)room.broadcastRoomEventSoon();
   roomManager.cleanupEmptyRooms();publishRooms();
@@ -236,6 +241,7 @@ wss.on('connection',(ws,req)=>{
   },120);deferredTimer.unref?.();
  }
  ws.on('message',async raw=>{
+  ws.lastSeenAt=Date.now();
   if(shuttingDown)return;
   if(!limits.allow('all',60,240))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -301,7 +307,7 @@ wss.on('connection',(ws,req)=>{
      send(ws,{type:'QUIZ_LOADED',quiz:library.getByCode(msg.code,ownerHash),byCode:true,requestId:msg.requestId});break;
     case 'GET_ROOMS':send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
     case 'APP_PING':
-     if(limits.allow('ping',1,3))send(ws,{type:'APP_PONG',serverNow:Date.now(),t:Number.isFinite(msg.t)?msg.t:undefined,roomId:currentRoom?.id||null,stateVersion:currentRoom?.getStateVersion()});break;
+     if(limits.allow('ping',3,6))send(ws,{type:'APP_PONG',serverNow:Date.now(),t:Number.isFinite(msg.t)?msg.t:undefined,roomId:currentRoom?.id||null,stateVersion:currentRoom?.getStateVersion()});break;
     case 'GET_ROOM_STATE':
      if(!limits.allow('stateSync',1,2))break;
      if(currentRoom&&msg.roomId===currentRoom.id)currentRoom.sendCurrentState(ws,{recoveryRequestId:msg.requestId});
@@ -357,7 +363,8 @@ wss.on('connection',(ws,req)=>{
     case 'SUBMIT_SHORT':case 'SUBMIT_MULTIPLE':if(matchesRound(msg))currentRoom.submitAnswer(clientId,msg.answer);break;
     case 'ANSWER_EDITING':if(matchesRound(msg))currentRoom.submitAnswer(clientId,'',true);break;
     case 'START_GAME':if(currentRoom?.hostId===clientId&&['WAITING','ENDED'].includes(currentRoom.state)){currentRoom.startGame();publishRooms();}break;
-    case 'RESET_GAME':if(currentRoom?.hostId===clientId){currentRoom.resetToWaiting();publishRooms();}break;
+    // A reset wipes the game in progress, so only a finished game may go back to waiting.
+    case 'RESET_GAME':if(currentRoom?.hostId===clientId&&currentRoom.state==='ENDED'){currentRoom.resetToWaiting();publishRooms();}break;
    }
   }catch(error){console.error('퀴즈/방 처리 실패:',error.message);send(ws,{type:'ERROR',code:error.code,message:error.message||'처리하지 못했어요. 다시 시도해 주세요.',requestId:msg.requestId});}
  });

@@ -39,7 +39,7 @@ class Bot{
   ws.on('close',code=>{if(this.ws!==ws||stopping)return;this.live=false;this.stats.drops++;this.reconnect(code===1012?1200:0);});
   ws.on('error',()=>{});
  }
- reconnect(min=0){if(this.timer||stopping)return;const delay=Math.max(min,Math.min(4000,250*2**Math.min(this.attempts++,4)))+Math.random()*400;this.timer=setTimeout(()=>{this.timer=null;this.replace();},delay);}
+ reconnect(min=0){if(this.timer||stopping)return;const delay=Math.max(min,Math.min(2000,250*2**Math.min(this.attempts++,3)))+Math.random()*400;this.timer=setTimeout(()=>{this.timer=null;this.replace();},delay);}
  replace(){const old=this.ws;this.connect();if(old){old.removeAllListeners('message');old.removeAllListeners('close');old.on('close',()=>{});try{old.terminate();}catch{}}}
  send(m){if(this.ws?.readyState===1)this.ws.send(JSON.stringify(m));}
  receive(ws,raw){
@@ -76,10 +76,10 @@ class Bot{
  }
  tick(now){
   const ws=this.ws;if(!ws)return;
-  if(ws.readyState===0&&now-this.startedAt>8000){this.stats.connectTimeouts++;this.replace();return;}
+  if(ws.readyState===0&&now-this.startedAt>5000){this.stats.connectTimeouts++;this.replace();return;}
   if(ws.readyState!==1||!this.welcomed)return;
-  if(now-this.lastPacketAt>6000){this.stats.stalls++;this.replace();return;}
-  if(now-this.lastPingAt>=2000){this.lastPingAt=now;this.send({type:'APP_PING',t:now});}
+  if(now-this.lastPacketAt>3000){this.stats.stalls++;this.replace();return;}
+  if(now-this.lastPingAt>=1000){this.lastPingAt=now;this.send({type:'APP_PING',t:now});}
   if(this.live&&this.seq>this.acked&&now-(this.ackAt||0)>=200){this.ackAt=now;this.acked=this.seq;this.send({type:'WORLD_ACK',seq:this.seq});}
   const plan=this.plan;
   if(plan&&!plan.done&&now>=plan.at&&this.state?.roundId===plan.roundId){

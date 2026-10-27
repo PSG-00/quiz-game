@@ -118,11 +118,26 @@ async function main(){
   send(older,{type:'RESUME_ROOM',roomId:staleRoom,resumeToken:staleProof,worldDelta:true});await until(()=>older.messages.some(m=>m.type==='RESUME_REJECTED'));
   await sleep(100);assert.equal(newer.socket.readyState,1);assert.equal((await control('snapshot',{roomId:staleRoom})).players.find(p=>p.id===staleHost.id).connected,true);
   note('STALE-01','PASS','늦게 도착한 옛 연결의 복귀 요청이 새 연결의 자리를 빼앗지 않음',{});
+  // A host reset during a game is refused: it would wipe the prize game in progress.
+  const resetRound=await control('question',{roomId:staleRoom,question:{type:'SHORT',answer:'서울'},duration:20000});
+  send(newer,{type:'RESET_GAME'});await sleep(80);
+  const afterReset=await control('snapshot',{roomId:staleRoom});assert.equal(afterReset.state,'QUESTION');assert.equal(afterReset.roundId,resetRound.roundId);
+  note('RESET-01','PASS','게임 중 방장의 초기화 요청은 서버가 거절',{state:afterReset.state});
   // After a stall only the newest MOVE matters: a burst over the limiter still ends at its last spot.
   await control('question',{roomId:staleRoom,question:{type:'OX',answer:'O'},duration:20000,positions:{[staleGuest.id]:{x:0,z:0}}});
   for(let i=1;i<=40;i++)send(staleGuest,{type:'MOVE',x:-i*.03,z:0});
   const settled=await until(async()=>{const p=(await control('snapshot',{roomId:staleRoom})).players.find(p=>p.id===staleGuest.id);return Math.abs(p.x+1.2)<.01?p:null;},3000);
   note('MOVE-01','PASS','제한을 넘는 이동 묶음도 마지막 위치로 반영',{x:settled.x});
+  // A phone that goes silent (no messages, no pongs) is dropped within about 10 s, and its seat
+  // runs 30 s from the last thing the server heard from it, not from when the server noticed.
+  const silent={socket:new WebSocket('ws://127.0.0.1:'+port,{autoPong:false}),messages:[],id:null};clients.push(silent);
+  silent.socket.on('error',()=>{});silent.socket.on('message',raw=>{const m=JSON.parse(raw);silent.messages.push(m);if(m.type==='WELCOME'||m.type==='JOINED_ROOM')silent.id=m.clientId;});
+  await until(()=>silent.id);await join(silent,staleRoom);const lastHeard=Date.now();
+  const dropped=await until(async()=>{const p=(await control('snapshot',{roomId:staleRoom})).players.find(p=>p.id===silent.id);return p?.connected===false?p:null;},16000);
+  const noticedAfter=Date.now()-lastHeard,heldMs=dropped.until-lastHeard;
+  assert.ok(noticedAfter>=9000&&noticedAfter<=13000,'감지 '+noticedAfter);assert.ok(Math.abs(heldMs-30000)<1500,'기한 '+heldMs);
+  note('SILENT-01','PASS','응답 없는 연결은 약 10초 만에 끊김 처리, 자리 기한은 마지막 신호부터 30초',{noticedAfterMs:noticedAfter,heldMs});
+  await control('expire',{roomId:staleRoom,playerId:silent.id});
   await Promise.all([older,newer,staleGuest].map(b=>close(b)));
   const sockets=await Promise.all(Array.from({length:60},()=>connect()));
   const over=new WebSocket('ws://127.0.0.1:'+port),closeCode=await new Promise((resolve,reject)=>{over.on('close',resolve);over.on('error',reject);});

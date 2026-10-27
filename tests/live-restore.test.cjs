@@ -67,6 +67,58 @@ test('단계 실패: 상품이 걸린 게임은 자동 종료하지 않고 상�
  broken=false;r.runPending();assert.equal(r.state,'JUDGE');assert.equal(messages.at(-1).state,'JUDGE');
 });
 
+// Throws on the first call only, after the action has already changed part of the room.
+function failOnce(room,method){const original=room[method];let armed=true;room[method]=function(...args){if(armed){armed=false;throw new Error('injected '+method);}return original.apply(this,args);};}
+
+test('단계 실패 되돌림: 다음 문제로 넘어가다 실패해도 재시도가 문제를 건너뛰지 않음',t=>{
+ const r=new Room({title:'건너뜀',targetWinners:1,restSeconds:5,questions},'a');cleanup(t,r);
+ for(const id of ['a','b','c'])r.addPlayer(id,id.toUpperCase());
+ r.startGame();clearTimeout(r.timerHandle);t.mock.method(console,'error',()=>{});
+ failOnce(r,'broadcastRoomEvent');
+ r.runPending();clearTimeout(r.timerHandle);
+ assert.equal(r.state,'COUNTDOWN');assert.equal(r.currentQuestionIndex,-1);assert.equal(r.pending.action,'next');
+ r.runPending();clearTimeout(r.timerHandle);
+ assert.equal(r.state,'QUESTION');assert.equal(r.currentQuestionIndex,0);
+});
+
+test('단계 실패 되돌림: 판정 도중 실패해도 처음 판정과 같은 결과(정답자 있음·전원 오답)',t=>{
+ for(const answers of [{b:'서울'},{}]){
+  const r=playing(t);clearTimeout(r.timerHandle);for(const [id,answer] of Object.entries(answers))r.submitAnswer(id,answer);
+  // The same round judged without any failure is the expected outcome.
+  const clean=Room.restore(JSON.parse(JSON.stringify(r.snapshot())),{now:Date.now()});cleanup(t,clean);
+  clearTimeout(clean.timerHandle);clean.judgeQuestion();clearTimeout(clean.timerHandle);
+  t.mock.method(console,'error',()=>{});failOnce(r,'broadcastRoomEvent');
+  r.runPending();clearTimeout(r.timerHandle);
+  assert.equal(r.state,'QUESTION');assert.equal(r.pending.action,'judge');
+  for(const p of r.players.values())assert.equal(p.alive,true,`${p.id} 되돌림 후 생존 복원`);
+  r.runPending();clearTimeout(r.timerHandle);
+  assert.equal(r.state,'JUDGE');assert.equal(r.pending?.action,clean.pending?.action);
+  for(const p of r.players.values()){assert.equal(p.alive,clean.players.get(p.id).alive);assert.equal(p.lastResult,clean.players.get(p.id).lastResult);}
+ }
+});
+
+test('단계 실패: 이미 뽑힌 추첨은 다시 뽑지 않고 그대로 확정',t=>{
+ const r=new Room({title:'추첨',targetWinners:1,restSeconds:5,questions},'a');cleanup(t,r);
+ for(const id of ['a','b','c'])r.addPlayer(id,id.toUpperCase());
+ r.startGame();clearTimeout(r.timerHandle);r.state='JUDGE';r.schedule('finish',1000,{reason:'최종'});clearTimeout(r.timerHandle);
+ t.mock.method(console,'error',()=>{});failOnce(r,'broadcastRoomEvent');
+ r.runPending();clearTimeout(r.timerHandle);
+ const drawn=r.winners.map(w=>w.id);assert.equal(r.state,'LOTTERY');assert.equal(drawn.length,1);assert.equal(r.pending.action,'ended');
+ r.runPending();clearTimeout(r.timerHandle);assert.equal(r.state,'ENDED');assert.deepEqual(r.winners.map(w=>w.id),drawn);
+});
+
+test('재시작 복원: 이미 끊겨 있던 자리는 원래 30초 기한 유지, 재시작으로 끊긴 자리만 새 30초',t=>{
+ const r=playing(t);clearTimeout(r.timerHandle);const dropAt=Date.now()-20000;r.disconnectPlayer('c',null,dropAt);
+ const saved=JSON.parse(JSON.stringify(r.snapshot())),now=dropAt+25000;
+ const back=Room.restore(saved,{now});cleanup(t,back);
+ assert.equal(back.players.get('c').disconnectedUntil,dropAt+RECONNECT_GRACE_MS);
+ assert.equal(back.players.get('a').disconnectedUntil,now+RECONNECT_GRACE_MS);
+ assert.equal(back.resumePlayer(back.players.get('c'),{readyState:1,send(){}},dropAt+40000),false,'끊긴 지 40초면 복귀 불가');
+ // A deadline that passed while the server was down expires as soon as the room is back.
+ const late=Room.restore(saved,{now:dropAt+31000});cleanup(t,late);
+ assert.equal(late.expirePlayer('c',dropAt+31000),true);assert.equal(late.players.has('c'),false);
+});
+
 test('늦게 몰린 이동은 예산만큼 반영하고(되돌림 없음) 순간이동만 거절',t=>{
  const r=playing(t);r.currentQuestionIndex=1;r.questions[1].type='OX';r.state='QUESTION';r.stateEndTime=Date.now()+10000;
  const a=r.players.get('a');a.x=0;a.z=0;a.moveCredit=0;a.lastMoveAt=1000;

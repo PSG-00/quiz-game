@@ -5,7 +5,7 @@ const original=RoomManager.prototype.createRoom;
 RoomManager.prototype.createRoom=function(...args){manager=this;return original.apply(this,args);};
 process.env.OX_DISABLE_PERSISTENCE='1';delete process.env.OX_PUBLIC_TEST_BOTS;
 require('../../server/index');
-function view(room){if(!room)return null;return {id:room.id,state:room.state,hostId:room.hostId,gameId:room.gameId,roundId:room.roundId,index:room.currentQuestionIndex,end:room.stateEndTime,participants:[...room.roundParticipants],players:[...room.players.values()].map(p=>({id:p.id,name:p.name,x:p.x,z:p.z,alive:p.alive,eligible:p.eligible,connected:p.connected,answer:p.submittedText,submitted:p.hasSubmitted,editing:p.isEditing,avatar:p.avatarId,result:p.lastResult}))};}
+function view(room){if(!room)return null;return {id:room.id,state:room.state,hostId:room.hostId,gameId:room.gameId,roundId:room.roundId,index:room.currentQuestionIndex,end:room.stateEndTime,participants:[...room.roundParticipants],players:[...room.players.values()].map(p=>({id:p.id,name:p.name,x:p.x,z:p.z,alive:p.alive,eligible:p.eligible,connected:p.connected,until:p.disconnectedUntil||null,answer:p.submittedText,submitted:p.hasSubmitted,editing:p.isEditing,avatar:p.avatarId,result:p.lastResult}))};}
 process.on('message',message=>{try{
  const room=manager?.getRoom(message.roomId);let result;
  if(message.command==='rooms')result=manager?[...manager.rooms.values()].map(view):[];

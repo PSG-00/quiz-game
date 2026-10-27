@@ -1060,7 +1060,9 @@ let restoredSubmission=null;
 let reconnectTimer=null,connectionPaused=false,lastPacketAt=Date.now(),lastPingAt=0,connectionStartedAt=0,reconnectAttempts=0,lastRecoveryAt=0,pendingJoinRoomId=null;
 let connectionNoticeTimer=null;
 // A seat is held on the server, so a silent socket is replaced quickly instead of waited on.
-const PING_INTERVAL_MS=2000,STALL_MS=6000,DIRECT_CONNECT_MS=4000;
+// In a room 10 updates arrive per second and a ping is answered every second, so 3 s of
+// silence is a dead line; a question lasts only 12-15 s, so every second of waiting counts.
+const PING_INTERVAL_MS=1000,STALL_MS=3000,DIRECT_CONNECT_MS=3000,CONNECT_MS=5000,STATE_TIMEOUT_MS=2500,JOIN_TIMEOUT_MS=4000;
 let connectionLive=false,lastPollAt=Date.now(),probeSince=0,stateRequestAt=0,latestWorldSeq=-1,ackedWorldSeq=-1,serverSelfPos=null;
 let clockSamples=[],clockSynced=false;
 function worldFlags(){return {worldDelta:true,worldCompact:true,worldFlow:true};}
@@ -1135,7 +1137,7 @@ function maybeSwitchToDirect(now){
  if(!directSwitchPending)return;
  if(ws?.oxPath!=='cf'){directSwitchPending=false;return;}
  if(!currentRoomId||!connectionLive||recoveryTimer||document.querySelector('dialog[open]:not(#rules-dialog)')||!DIRECT_SWITCH_STATES.has(roomState?.state))return;
- // A hung direct connect (4 s) plus the fallback must still end inside the break.
+ // A hung direct connect (3 s) plus the fallback must still end inside the break.
  if(roomState.state==='BREAK'&&roomState.stateEndTime-(now-serverTimeOffset)<8000)return;
  directSwitchPending=false;lastDirectSwitchAt=now;
  clientDiag.record('direct-switch',{detail:roomState.state});
@@ -1143,7 +1145,7 @@ function maybeSwitchToDirect(now){
 }
 function scheduleReconnect(minDelay=0){
  if(connectionPaused||reconnectTimer)return;
- const delay=Math.max(minDelay,Math.min(4000,250*2**Math.min(reconnectAttempts++,4)))+Math.random()*400;
+ const delay=Math.max(minDelay,Math.min(2000,250*2**Math.min(reconnectAttempts++,3)))+Math.random()*400;
  reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectWebSocket();},delay);
 }
 let recoveryTimer=null,recoveryRequestId=null,recoveryTargetRoomId=null,recoveryJoinFallback=false;
@@ -1391,18 +1393,18 @@ function pollConnection(){
  const now=Date.now(),gap=now-lastPollAt;lastPollAt=now;
  if(connectionPaused||document.hidden||!ws)return;
  // A starved main thread (heavy frame, frozen page) is not evidence of a dead socket.
- if(gap>2500){lastPacketAt=Math.max(lastPacketAt,now-2000);clientDiag.record('main-thread-blocked',{blockedMs:gap},{throttleMs:30000});}
- if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>(ws.oxPath==='direct'?DIRECT_CONNECT_MS:8000)){noteOutage('connect-timeout');hardRecoverConnection();}return;}
+ if(gap>1500){lastPacketAt=Math.max(lastPacketAt,now-STALL_MS+1500);clientDiag.record('main-thread-blocked',{blockedMs:gap},{throttleMs:30000});}
+ if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>(ws.oxPath==='direct'?DIRECT_CONNECT_MS:CONNECT_MS)){noteOutage('connect-timeout');hardRecoverConnection();}return;}
  if(ws.readyState!==WebSocket.OPEN){scheduleReconnect();return;}
  if(probeSince&&now-probeSince>2500&&lastPacketAt<probeSince){probeSince=0;noteOutage('wake-probe-timeout');hardRecoverConnection();return;}
  if(now-lastPacketAt>STALL_MS){noteOutage('stall');hardRecoverConnection();return;}
  if(serverFeatures.liveSync&&now-lastPingAt>=PING_INTERVAL_MS){lastPingAt=now;ws.send(JSON.stringify({type:'APP_PING',t:now}));}
  if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now())){ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));stateRequestAt||=now;}
  // Pongs can trickle through a jammed pipe; an unanswered state request cannot.
- if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;noteOutage('state-timeout');hardRecoverConnection();return;}
+ if(stateRequestAt&&now-stateRequestAt>STATE_TIMEOUT_MS){stateRequestAt=0;noteOutage('state-timeout');hardRecoverConnection();return;}
  // The room screen is up on an open socket that never got JOINED_ROOM back (its JOIN or
  // RESUME went down with an earlier connection): start over rather than wait forever.
- if(currentRoomId&&!connectionLive&&ws.oxWelcomedAt&&now-ws.oxWelcomedAt>6000&&!recoveryTimer){ws.oxWelcomedAt=now;noteOutage('join-timeout');hardRecoverConnection();return;}
+ if(currentRoomId&&!connectionLive&&ws.oxWelcomedAt&&now-ws.oxWelcomedAt>JOIN_TIMEOUT_MS&&!recoveryTimer){ws.oxWelcomedAt=now;noteOutage('join-timeout');hardRecoverConnection();return;}
  flushPendingAnswer();
  maybeSwitchToDirect(now);
  if((connectionLive||libraryReady)&&now-lastDiagFlushAt>5000)flushDiagnostics();
@@ -2117,7 +2119,7 @@ function wakeConnection(){
  if(!ws||ws.readyState===WebSocket.CLOSED){connectWebSocket();return;}
  // Nothing is pinged (and no world ticks arrive) while hidden, so old silence proves
  // nothing; the probe ping alone decides whether this socket survived.
- if(ws.readyState===WebSocket.OPEN){probeSince=Date.now();lastPingAt=0;lastPacketAt=Math.max(lastPacketAt,Date.now()-3000);}
+ if(ws.readyState===WebSocket.OPEN){probeSince=Date.now();lastPingAt=0;lastPacketAt=Math.max(lastPacketAt,Date.now());}
  pollConnection();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wakeConnection();});

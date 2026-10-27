@@ -9,7 +9,7 @@
 ## 동작
 
 - 서버 환경 변수 `OX_DIRECT_WS_URL`이 있을 때만 페이지에 `<meta name="ox-direct-socket">`을 넣는다. 없으면 지금과 똑같이 페이지 주소로만 연결한다.
-- 새 연결은 직접 주소를 먼저 쓴다. 직접 연결이 4초 안에 열리지 않거나 WELCOME 전에 닫히면 다음 한 번은 Cloudflare로 연결한다.
+- 새 연결은 직접 주소를 먼저 쓴다. 직접 연결이 3초 안에 열리지 않거나 WELCOME 전에 닫히면 다음 한 번은 Cloudflare로 연결한다.
 - Cloudflare 연결이 붙으면 직접 주소를 옆에서 한 번 확인한다. 확인도 실패하면 그 탭은 10분 동안 Cloudflare만 쓴다.
 - 확인이 성공하면(직접 주소는 멀쩡한데 Cloudflare에 붙은 경우) 연결 복구 버튼과 같은 방식으로 같은 자리를 유지한 채 직접 주소로 옮긴다. 대기실(`WAITING`), 쉬는 시간(`BREAK`, 남은 시간 8초 이상), 게임 종료(`ENDED`)에서만 옮기고, 문제·판정·추첨 중이거나 재연결이 닫아 버리는 창(비밀번호·저장·우승 기록 등)이 열려 있으면 기다린다. 로비에서는 옮기지 않고 방에 들어간 뒤 옮긴다. 옮긴 뒤 5분 안에는 다시 옮기지 않는다.
 - 두 경로가 모두 실패하면 망 자체가 끊긴 것이므로 번갈아 시도한다. Cloudflare 장애 때는 막아 둔 직접 주소도 다시 시도한다.
@@ -81,6 +81,6 @@ grep -h -E "CONNECTION_PATHS|direct-failed|direct-probe|direct-switch" ~/.pm2/lo
 
 켜기: `ecosystem.config.cjs`의 `env_production`에 `OX_DIRECT_WS_URL: 'wss://ws.quiz.rescene.online'`을 넣고 게임이 없을 때 main에 푸시한다. 배포 뒤 새로 연 페이지부터 직접 주소를 쓴다.
 
-끄기: 같은 줄을 지우고 푸시한다. 급할 때는 Caddy를 멈추거나(`sudo systemctl stop caddy`) DNS 레코드를 지워도 된다. 이 경우 폰은 직접 연결 실패 후 Cloudflare로 붙는다. 탭마다 처음 한 번은 실패를 확인하느라 최대 4초 늦어진다.
+끄기: 같은 줄을 지우고 푸시한다. 급할 때는 Caddy를 멈추거나(`sudo systemctl stop caddy`) DNS 레코드를 지워도 된다. 이 경우 폰은 직접 연결 실패 후 Cloudflare로 붙는다. 탭마다 처음 한 번은 실패를 확인하느라 최대 3초 늦어진다.
 
 대가: `ws.quiz` 주소로는 VM IP가 공개되고, 그 경로는 Cloudflare의 공격 차단을 받지 않는다. 페이지와 Cloudflare 경로는 그대로 남는다.

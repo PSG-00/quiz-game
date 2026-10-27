@@ -204,14 +204,15 @@ class Room {
     this.hostId=(active.find(p=>!this.testBotIds?.has(p.id))||active[0])?.id||null;
   }
 
-  disconnectPlayer(id,onExpire,now=Date.now()){
+  disconnectPlayer(id,onExpire,now=Date.now(),lastSeenAt=now){
     const p=this.players.get(id);if(!p||p.connected===false)return;
     // The seat and the host role are held in every state, the waiting room included: a phone
     // that blinks out as the host presses Start still plays, and a host who blinks out keeps
     // the Start button. Only an expired seat (removePlayer) hands the host role on.
-    p.connected=false;p.ws=null;p.disconnectedUntil=now+RECONNECT_GRACE_MS;
+    // The 30 s run from the phone's last sign of life, not from when the server noticed.
+    p.connected=false;p.ws=null;p.disconnectedUntil=Math.min(now,Number.isFinite(lastSeenAt)?lastSeenAt:now)+RECONNECT_GRACE_MS;
     p.onDisconnectExpire=onExpire;
-    p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),RECONNECT_GRACE_MS);
+    p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),Math.max(0,p.disconnectedUntil-now));
     p.disconnectTimer.unref?.();
   }
 
@@ -279,16 +280,38 @@ class Room {
 
   runPending(source='timer'){
     const pending=this.pending;if(!pending)return false;
+    // A failed action is undone before it is retried. Re-running it on a half-changed room
+    // advanced the question twice (skipping one) or judged on top of a partial judgement.
+    const before=JSON.parse(JSON.stringify(this.snapshot()));
     this.clearPhaseTimer();
     try{this.performPending(pending);this.phaseFailures=0;}
     catch(error){
       this.phaseFailures=(this.phaseFailures||0)+1;
       console.error('ROOM_PHASE_FAILED',JSON.stringify({roomId:this.id,state:this.state,action:pending.action,source,failures:this.phaseFailures}),error);
-      // A prize game is never ended automatically: keep every result and retry, so a
-      // passing fault clears itself and a hotfix deploy continues the restored room.
+      // A draw is final once made (players may already have seen it): keep it and go on.
+      const drawn=pending.action==='finish'&&['LOTTERY','ENDED'].includes(this.state)&&this.winners.length>0;
+      if(drawn){const next=this.inferPending();if(next)this.schedule(next.action,Math.max(0,this.stateEndTime-Date.now()),next);return true;}
+      // A prize game is never ended automatically: put the room back and retry the same
+      // step, so a passing fault clears itself and a hotfix deploy continues the restored room.
+      this.rollbackGameState(before);
       this.stateEndTime=Date.now()+2000;this.schedule(pending.action,2000,pending);
     }
     return true;
+  }
+
+  // The game as it was before a phase action that threw. Connections, held seats and the
+  // result record are left alone; only what a phase action itself changes is restored.
+  rollbackGameState(saved){
+    Object.assign(this,{state:saved.state,gameId:saved.gameId,roundId:saved.roundId,currentQuestionIndex:saved.currentQuestionIndex,
+      minorityOutcome:saved.minorityOutcome,lastEliminatedForFinal:saved.lastEliminatedForFinal,runnerUpLottery:saved.runnerUpLottery,
+      lastNotice:saved.lastNotice,hostSpeech:saved.hostSpeech,winners:saved.winners,allFinalSurvivors:saved.allFinalSurvivors});
+    this.roundParticipants=new Set(saved.roundParticipants);
+    for(const s of saved.players){
+      const p=this.players.get(s.id);
+      if(p)Object.assign(p,{x:s.x,z:s.z,alive:s.alive,eligible:s.eligible,submittedText:s.submittedText,hasSubmitted:s.hasSubmitted,lastResult:s.lastResult,placedOnStage:s.placedOnStage,lastStagePosition:s.lastStagePosition,lastSpectatorPosition:s.lastSpectatorPosition});
+    }
+    const q=this.getCurrentQuestion();
+    this.race=q?.type==='RACE'&&saved.race?RaceRound.restore(this,q,saved.race):null;
   }
 
   performPending({action,reason,speech,notice,index}){
@@ -870,10 +893,13 @@ class Room {
       state:data.state,gameId:data.gameId,roundId:data.roundId,currentQuestionIndex:data.currentQuestionIndex,lastNotice:data.lastNotice,hostSpeech:data.hostSpeech,winners:data.winners||[],allFinalSurvivors:data.allFinalSurvivors||[],stateVersion:data.stateVersion||0,recordedGameId:data.recordedGameId||null});
     room.roundParticipants=new Set(data.roundParticipants||[]);
     for(const saved of data.players||[]){
-      // Every seat is held as if its player had just disconnected; resume tokens stay valid.
-      const p={...saved,ws:null,connected:false,isEditing:false,moveCredit:1.5,lastMoveAt:now,onDisconnectExpire:onExpire,disconnectedUntil:Math.max(Number(saved.disconnectedUntil)||0,now+RECONNECT_GRACE_MS)};
+      // Seats the restart itself dropped are held for a fresh 30 s; resume tokens stay valid.
+      // A seat that was already held keeps its own deadline (30 s from that drop, never
+      // extended by a restart) and expires at once if it passed while the server was down.
+      const heldUntil=Number(saved.disconnectedUntil);
+      const p={...saved,ws:null,connected:false,isEditing:false,moveCredit:1.5,lastMoveAt:now,onDisconnectExpire:onExpire,disconnectedUntil:heldUntil>0?heldUntil:now+RECONNECT_GRACE_MS};
       if(!Number.isInteger(p.k))p.k=room.nextPlayerKey++;
-      p.disconnectTimer=setTimeout(()=>room.expirePlayer(p.id),p.disconnectedUntil-now);p.disconnectTimer.unref?.();
+      p.disconnectTimer=setTimeout(()=>room.expirePlayer(p.id),Math.max(0,p.disconnectedUntil-now));p.disconnectTimer.unref?.();
       room.players.set(p.id,p);
     }
     const q=room.getCurrentQuestion();
