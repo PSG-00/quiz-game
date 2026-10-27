@@ -282,7 +282,7 @@ class Room {
     const pending=this.pending;if(!pending)return false;
     // A failed action is undone before it is retried. Re-running it on a half-changed room
     // advanced the question twice (skipping one) or judged on top of a partial judgement.
-    const before=JSON.parse(JSON.stringify(this.snapshot()));
+    const before=JSON.parse(JSON.stringify(this.snapshot())),endBefore=this.stateEndTime;
     this.clearPhaseTimer();
     try{this.performPending(pending);this.phaseFailures=0;}
     catch(error){
@@ -293,8 +293,10 @@ class Room {
       if(drawn){const next=this.inferPending();if(next)this.schedule(next.action,Math.max(0,this.stateEndTime-Date.now()),next);return true;}
       // A prize game is never ended automatically: put the room back and retry the same
       // step, so a passing fault clears itself and a hotfix deploy continues the restored room.
+      // The deadline goes back too. Moving it 2 s on reopened a question whose judgement had
+      // failed at the deadline, so late answers and moves were accepted until the retry.
       this.rollbackGameState(before);
-      this.stateEndTime=Date.now()+2000;this.schedule(pending.action,2000,pending);
+      this.stateEndTime=endBefore;this.schedule(pending.action,2000,pending);
     }
     return true;
   }

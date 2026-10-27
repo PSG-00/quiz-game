@@ -97,6 +97,25 @@ test('단계 실패 되돌림: 판정 도중 실패해도 처음 판정과 같�
  }
 });
 
+test('단계 실패 되돌림: 판정이 실패해도 지난 마감이 다시 열리지 않아 늦은 답·이동은 거절',t=>{
+ t.mock.method(console,'error',()=>{});
+ for(const type of ['SHORT','OX']){
+  const r=new Room({title:'마감',targetWinners:1,restSeconds:5,questions:[{type,question:'점검',answer:type==='OX'?'O':'서울',timeLimit:15}]},'a');cleanup(t,r);
+  for(const id of ['a','b','c'])r.addPlayer(id,id.toUpperCase());
+  r.startGame();clearTimeout(r.timerHandle);r.nextQuestion({skipPreparation:true});clearTimeout(r.timerHandle);
+  const [a,b,c]=['a','b','c'].map(id=>r.players.get(id));
+  // a and b answer correctly in time; c tries only after the deadline.
+  if(type==='SHORT'){r.submitAnswer('a','서울');r.submitAnswer('b','서울');}else{a.x=-3;b.x=-3;c.x=3;}
+  const deadline=Date.now()-10;r.stateEndTime=deadline;failOnce(r,'broadcastRoomEvent');
+  r.runPending();clearTimeout(r.timerHandle);
+  assert.equal(r.state,'QUESTION');assert.equal(r.stateEndTime,deadline,'마감은 원래대로');
+  if(type==='SHORT'){r.submitAnswer('c','서울');assert.equal(c.hasSubmitted,false,'마감 뒤 답안 거절');}
+  else{r.movePlayer('c',-3,0,{enforceSpeed:true});assert.equal(c.x,3,'마감 뒤 이동 거절');}
+  r.runPending();clearTimeout(r.timerHandle);
+  assert.equal(r.state,'JUDGE');assert.equal(c.alive,false,`${type}: 늦게 낸 c는 탈락`);assert.equal(a.alive,true);
+ }
+});
+
 test('단계 실패: 이미 뽑힌 추첨은 다시 뽑지 않고 그대로 확정',t=>{
  const r=new Room({title:'추첨',targetWinners:1,restSeconds:5,questions},'a');cleanup(t,r);
  for(const id of ['a','b','c'])r.addPlayer(id,id.toUpperCase());
