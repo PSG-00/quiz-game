@@ -13,6 +13,7 @@ const {QuizLoadGuard}=require('./QuizLoadGuard');
 const {LiveRoomStore}=require('./LiveRoomStore');
 const {ResultLog}=require('./ResultLog');
 const ClientDiag=require('./ClientDiag');
+const {parseDirectUrl,injectDirectMeta,socketPath}=require('./DirectSocket');
 // Every log line starts with its own KST time, so drops that happen in the same
 // second line up when the PM2 log files are searched later.
 const logTime=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
@@ -27,10 +28,12 @@ const PORT=process.env.PORT||3000;
 const clientDir=path.join(__dirname,'../client');
 const app=express();
 app.use('/api',(req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+const directSocket=parseDirectUrl(process.env.OX_DIRECT_WS_URL);
+if(process.env.OX_DIRECT_WS_URL&&!directSocket)console.warn('OX_DIRECT_WS_URL 무시: wss:// 주소가 아닙니다.');
 let indexHtml=null;
 app.get(['/','/index.html'],(req,res)=>{
  // Files only change by deploy (a restart) in production; development re-hashes per load.
- if(!indexHtml||process.env.NODE_ENV!=='production')indexHtml=versionedHtml(fs.readFileSync(path.join(clientDir,'index.html'),'utf8'),clientDir);
+ if(!indexHtml||process.env.NODE_ENV!=='production')indexHtml=injectDirectMeta(versionedHtml(fs.readFileSync(path.join(clientDir,'index.html'),'utf8'),clientDir),directSocket);
  res.setHeader('Cache-Control','no-store');res.type('html').send(indexHtml);
 });
 app.use(express.static(clientDir,{etag:true,lastModified:true,setHeaders:(res,file)=>res.setHeader('Cache-Control',cacheControl(file))}));
@@ -158,11 +161,19 @@ const heartbeatInterval=setInterval(()=>{
  }
 },15000);
 heartbeatInterval.unref?.();
+// Once the direct host is on, shows how many players actually reach the VM without the detour.
+let lastPathSummary='';
+const pathSummaryInterval=setInterval(()=>{
+ if(!directSocket||!wss.clients.size)return;
+ const counts={direct:0,cf:0};for(const peer of wss.clients)if(peer.path)counts[peer.path]++;
+ const summary=JSON.stringify(counts);if(summary!==lastPathSummary){lastPathSummary=summary;console.info('CONNECTION_PATHS',summary);}
+},60000);
+pathSummaryInterval.unref?.();
 wss.on('connection',(ws,req)=>{
  if(shuttingDown||wss.clients.size>MAX_CONNECTIONS){ws.on('error',()=>{});ws.close(shuttingDown?1012:1013,shuttingDown?'서버를 다시 시작하고 있어요.':'서버 접속 인원이 많아요. 잠시 후 다시 시도해 주세요.');return;}
  let clientId='user_'+crypto.randomBytes(6).toString('hex'),currentRoom=null,ownerHash=null,quizLoadUntil=0;
  const limits=new RequestLimits(),connectedAt=Date.now();
- ws.clientAddress=clientAddress(req);
+ ws.clientAddress=clientAddress(req);ws.path=socketPath(req,directSocket);
  ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;});
  ws.detachRoom=()=>{currentRoom=null;};
  // Compact deltas and acknowledged flow control are opt-in, so cached old clients keep working.
@@ -191,7 +202,7 @@ wss.on('connection',(ws,req)=>{
   if(!room.resumePlayer(player,ws))return false;
   currentRoom=room;clientId=player.id;configureWorld(msg);
   if(resumeToken)joined(player,resumeToken,true);else issueSession(player,true);
-  console.info('SESSION_RESTORED',JSON.stringify({roomId:room.id,clientId:player.id}));
+  console.info('SESSION_RESTORED',JSON.stringify({roomId:room.id,clientId:player.id,path:ws.path}));
   room.sendCurrentState(ws);room.broadcastRoomEvent();room.broadcastWorldTick();publishRooms();return true;
  }
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
@@ -328,7 +339,7 @@ wss.on('connection',(ws,req)=>{
   // During shutdown the saved snapshot, not these closes, is what the next process restores.
   if(shuttingDown)return;
   const roomId=currentRoom?.id;leave(true);
-  if(roomId)console.info('CONNECTION_CLOSED',JSON.stringify({roomId,clientId,code,seconds:Math.round((Date.now()-connectedAt)/1000),worldSkipped:ws.worldSkipped||0}));
+  if(roomId)console.info('CONNECTION_CLOSED',JSON.stringify({roomId,clientId,code,seconds:Math.round((Date.now()-connectedAt)/1000),worldSkipped:ws.worldSkipped||0,path:ws.path}));
  });
  ws.on('error',()=>{if(!shuttingDown)leave(true);});
 });

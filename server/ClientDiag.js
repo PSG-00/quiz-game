@@ -2,7 +2,7 @@
 // fields with bounded sizes before it reaches the log.
 const MAX_EVENTS=10;
 const NUMBERS=['code','gapMs','rttMs','minRttMs','fps','maxFrameMs','attempts','outageMs','awayMs','blockedMs','ago'];
-const STRINGS={detail:200,state:12,room:24,net:12};
+const STRINGS={detail:200,state:12,room:24,net:12,path:8};
 function sanitize(events,device){
  if(!Array.isArray(events))return [];
  const deviceName=typeof device==='string'&&device?device.slice(0,40):null;

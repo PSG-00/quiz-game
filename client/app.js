@@ -1060,10 +1060,13 @@ let restoredSubmission=null;
 let reconnectTimer=null,connectionPaused=false,lastPacketAt=Date.now(),lastPingAt=0,connectionStartedAt=0,reconnectAttempts=0,lastRecoveryAt=0,pendingJoinRoomId=null;
 let connectionNoticeTimer=null;
 // A seat is held on the server, so a silent socket is replaced quickly instead of waited on.
-const PING_INTERVAL_MS=2000,STALL_MS=6000;
+const PING_INTERVAL_MS=2000,STALL_MS=6000,DIRECT_CONNECT_MS=4000;
 let connectionLive=false,lastPollAt=Date.now(),probeSince=0,stateRequestAt=0,latestWorldSeq=-1,ackedWorldSeq=-1,serverSelfPos=null;
 let clockSamples=[],clockSynced=false;
 function worldFlags(){return {worldDelta:true,worldCompact:true,worldFlow:true};}
+// The server names a DNS-only host when one is set up; without it this is the page's own host.
+const DIRECT_SOCKET_URL=document.querySelector('meta[name="ox-direct-socket"]')?.content||'';
+const connectionPath=ConnectionPath.create({directUrl:DIRECT_SOCKET_URL,pageUrl:`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}`,storage:resultStorage});
 // Offset from the lowest-latency ping; ROOM_STATE arrival time includes queueing delay.
 function recordClockSample(sentAt,serverNow){
  const now=Date.now(),rtt=now-sentAt;if(!(rtt>=0&&rtt<10000))return;
@@ -1081,7 +1084,7 @@ const DIAG_DEVICE=(()=>{
 })();
 const clientDiag=ClientDiag.create({storage:resultStorage,context:()=>({
  gapMs:Date.now()-lastPacketAt,rttMs:clockSamples[clockSamples.length-1]?.rtt,minRttMs:clockSamples.length?Math.min(...clockSamples.map(s=>s.rtt)):undefined,
- fps:lastFps??undefined,maxFrameMs:takeLongestFrame(),state:roomState?.state,room:currentRoomId||undefined,hidden:document.hidden,attempts:reconnectAttempts,net:navigator.connection?.effectiveType
+ fps:lastFps??undefined,maxFrameMs:takeLongestFrame(),state:roomState?.state,room:currentRoomId||undefined,hidden:document.hidden,attempts:reconnectAttempts,net:navigator.connection?.effectiveType,path:ws?.oxPath||undefined
 })});
 let outageStartedAt=0,hiddenSince=0,lastDiagFlushAt=0;
 function noteOutage(reason,extra){outageStartedAt||=Date.now();clientDiag.record(reason,extra);}
@@ -1100,6 +1103,23 @@ document.addEventListener('visibilitychange',()=>{
  if(currentRoomId&&hiddenSince&&Date.now()-hiddenSince>5000)clientDiag.record('returned',{awayMs:Date.now()-hiddenSince});
  hiddenSince=0;
 });
+// A socket that never got WELCOME says which address failed; 1012/1013 are the server's own.
+function reportSocketFailure(socket,code){
+ if(!socket||socket.oxWelcomed||socket.oxReported)return;socket.oxReported=true;
+ if(code===1012||code===1013)return;
+ if(socket.oxPath==='direct')clientDiag.record('direct-failed',{code,detail:`${Date.now()-socket.oxStartedAt}ms`});
+ connectionPath.failed(socket.oxPath);
+}
+// Cloudflare worked right after the direct address failed. Check the direct one on the side:
+// a passing blip must not keep this phone on the slower path for the next ten minutes.
+function probeDirectSocket(){
+ let done=false,probe;
+ const finish=ok=>{if(done)return;done=true;clearTimeout(timer);try{probe.close();}catch{}connectionPath.probed(ok);clientDiag.record('direct-probe',{detail:ok?'ok':'failed'});};
+ const timer=setTimeout(()=>finish(false),DIRECT_CONNECT_MS);
+ try{probe=new WebSocket(DIRECT_SOCKET_URL);}catch{finish(false);return;}
+ probe.onmessage=event=>{try{if(JSON.parse(event.data).type==='WELCOME')finish(true);}catch{}};
+ probe.onerror=probe.onclose=()=>finish(false);
+}
 function scheduleReconnect(minDelay=0){
  if(connectionPaused||reconnectTimer)return;
  const delay=Math.max(minDelay,Math.min(4000,250*2**Math.min(reconnectAttempts++,4)))+Math.random()*400;
@@ -1153,9 +1173,9 @@ function connectWebSocket(force=false) {
   if(!force&&ws&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(ws.readyState))return;
   clearTimeout(reconnectTimer);reconnectTimer=null;
   const previous=ws;
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${location.host}`;
-  const socket=ws=new WebSocket(wsUrl);libraryReady=false;connectionStartedAt=lastPacketAt=Date.now();lastPingAt=0;
+  reportSocketFailure(previous);
+  const target=connectionPath.next();
+  const socket=ws=new WebSocket(target.url);socket.oxPath=target.path;socket.oxStartedAt=Date.now();libraryReady=false;connectionStartedAt=lastPacketAt=Date.now();lastPingAt=0;
   connectionLive=false;probeSince=0;stateRequestAt=0;
   if(previous&&previous!==socket){quizAccessUntil=0;cancelQuizPassword();resetCodeLoad();pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();previous.onmessage=previous.onclose=previous.onerror=null;
     if(recoveryTargetRoomId&&previous.readyState===WebSocket.OPEN){retiringSockets.add(previous);setTimeout(()=>{if(retiringSockets.delete(previous))try{previous.close();}catch{}},10000);}
@@ -1168,6 +1188,7 @@ function connectWebSocket(force=false) {
 
     switch (msg.type) {
       case 'WELCOME': {
+        socket.oxWelcomed=true;if(connectionPath.connected(socket.oxPath))probeDirectSocket();
         myClientId = msg.clientId;
         serverFeatures=msg.features||{};renderQuizBuilder();
         libraryReady=false;
@@ -1311,6 +1332,7 @@ function connectWebSocket(force=false) {
 
   ws.onclose = (event) => {
     if(ws!==socket)return;
+    reportSocketFailure(socket,event.code);
     connectionLive=false;
     clearTimeout(recoveryTimer);recoveryTimer=null;
     quizAccessUntil=0;cancelQuizPassword();
@@ -1333,7 +1355,7 @@ function pollConnection(){
  if(connectionPaused||document.hidden||!ws)return;
  // A starved main thread (heavy frame, frozen page) is not evidence of a dead socket.
  if(gap>2500){lastPacketAt=Math.max(lastPacketAt,now-2000);clientDiag.record('main-thread-blocked',{blockedMs:gap},{throttleMs:30000});}
- if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>8000){noteOutage('connect-timeout');hardRecoverConnection();}return;}
+ if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>(ws.oxPath==='direct'?DIRECT_CONNECT_MS:8000)){noteOutage('connect-timeout');hardRecoverConnection();}return;}
  if(ws.readyState!==WebSocket.OPEN){scheduleReconnect();return;}
  if(probeSince&&now-probeSince>2500&&lastPacketAt<probeSince){probeSince=0;noteOutage('wake-probe-timeout');hardRecoverConnection();return;}
  if(now-lastPacketAt>STALL_MS){noteOutage('stall');hardRecoverConnection();return;}
