@@ -12,6 +12,14 @@ const {RequestLimits}=require('./RequestLimits');
 const {QuizLoadGuard}=require('./QuizLoadGuard');
 const {LiveRoomStore}=require('./LiveRoomStore');
 const {ResultLog}=require('./ResultLog');
+const ClientDiag=require('./ClientDiag');
+// Every log line starts with its own KST time, so drops that happen in the same
+// second line up when the PM2 log files are searched later.
+const logTime=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+for(const level of ['log','info','warn','error']){
+ const write=console[level].bind(console);
+ console[level]=(...args)=>{const now=new Date();write(`${logTime.format(now)}.${String(now.getMilliseconds()).padStart(3,'0')} KST`,...args);};
+}
 const passwordFile=path.join(__dirname,'quizLoadPassword.json');
 const quizLoadGuard=new QuizLoadGuard({enabled:process.env.OX_QUIZ_LOAD_LOCK==='1'||process.env.NODE_ENV==='production'&&process.env.OX_QUIZ_LOAD_LOCK!=='0',record:fs.existsSync(passwordFile)?JSON.parse(fs.readFileSync(passwordFile,'utf8')):null});
 const MAX_CONNECTIONS=Math.max(50,Number.parseInt(process.env.OX_MAX_CONNECTIONS,10)||500);
@@ -187,7 +195,7 @@ wss.on('connection',(ws,req)=>{
   room.sendCurrentState(ws);room.broadcastRoomEvent();room.broadcastWorldTick();publishRooms();return true;
  }
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
- send(ws,{type:'WELCOME',clientId,features:{liveSync:true,quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true,worldCompact:true,worldFlow:true,timeSync:true,restartResume:!disabled,results:true},rooms:roomManager.getRoomListSummary()});
+ send(ws,{type:'WELCOME',clientId,features:{liveSync:true,quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true,worldCompact:true,worldFlow:true,timeSync:true,restartResume:!disabled,results:true,diag:true},rooms:roomManager.getRoomListSummary()});
  ws.on('message',async raw=>{
   if(!limits.allow('all',60,120))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
@@ -200,6 +208,11 @@ wss.on('connection',(ws,req)=>{
    if(msg.type==='MOVE'&&!limits.allow('move',30,20))return;
    if(msg.type==='WORLD_ACK'){
     if(limits.allow('ack',10,10)&&Number.isInteger(msg.seq))ws.worldAckSeq=Math.max(ws.worldAckSeq||0,Math.min(msg.seq,ws.worldSentSeq||0));
+    return;
+   }
+   // At most one batch every 5 s per connection keeps a misbehaving client from flooding the log.
+   if(msg.type==='CLIENT_DIAG'){
+    if(limits.allow('diag',.2,3))for(const event of ClientDiag.sanitize(msg.events,msg.device))console.info('CLIENT_DIAG',JSON.stringify({clientId,roomId:currentRoom?.id||null,...event}));
     return;
    }
    if(msg.type==='ANSWER_EDITING'&&!limits.allow('editing',5,10))return;

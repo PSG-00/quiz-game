@@ -786,13 +786,17 @@ const clock = new THREE.Timer();
 const framePacing=FramePacing.create(144);
 const fpsMeter=document.getElementById('fps-meter');
 let fpsWindowStart=null,fpsFrames=0,fpsRoomId=null;
+// Diagnostics: the latest per-second FPS and the longest visible frame since the last report.
+let lastFps=null,lastFrameAt=null,longestFrameMs=0;
+function takeLongestFrame(){const value=Math.round(longestFrameMs);longestFrameMs=0;return value;}
 function recordRenderedFrame(now){
   if(fpsRoomId!==currentRoomId){fpsRoomId=currentRoomId;fpsWindowStart=null;fpsFrames=0;fpsMeter.textContent='FPS --';}
   if(!currentRoomId)return;
-  if(fpsWindowStart===null){fpsWindowStart=now;return;}
+  if(fpsWindowStart===null){fpsWindowStart=lastFrameAt=now;return;}
+  longestFrameMs=Math.max(longestFrameMs,now-lastFrameAt);lastFrameAt=now;
   fpsFrames++;
   const elapsed=now-fpsWindowStart;
-  if(elapsed>=1000){fpsMeter.textContent=`FPS ${Math.round(fpsFrames*1000/elapsed)}`;fpsFrames=0;fpsWindowStart=now;}
+  if(elapsed>=1000){lastFps=Math.round(fpsFrames*1000/elapsed);fpsMeter.textContent=`FPS ${lastFps}`;fpsFrames=0;fpsWindowStart=now;}
 }
 document.addEventListener('visibilitychange',()=>{fpsWindowStart=null;fpsFrames=0;fpsMeter.textContent='FPS --';});
 const avatarFrustum=new THREE.Frustum(),avatarViewProjection=new THREE.Matrix4(),avatarSphere=new THREE.Sphere(new THREE.Vector3(),3);
@@ -1067,6 +1071,35 @@ function recordClockSample(sentAt,serverNow){
  clockSamples=clockSamples.filter(s=>now-s.at<60000&&Math.abs(s.offset-sample.offset)<1000).concat(sample).slice(-12);
  serverTimeOffset=clockSamples.reduce((best,s)=>s.rtt<best.rtt?s:best).offset;clockSynced=true;
 }
+// Diagnostics for the operator: each stall/reconnect/error is sent with the device's view
+// (silence, latency, FPS, longest frame) once a connection works, and logged as CLIENT_DIAG.
+const DIAG_DEVICE=(()=>{
+ const ua=navigator.userAgent,os=/iPhone|iPad|iPod/.test(ua)?'ios':/Android/.test(ua)?'android':'desktop';
+ const app=(ua.match(/KAKAOTALK|Instagram|FBAN|NAVER|Line\//i)||[''])[0].toLowerCase().replace(/\W/g,'');
+ const browser=/SamsungBrowser/.test(ua)?'samsung':/CriOS|Chrome/.test(ua)?'chrome':/Firefox|FxiOS/.test(ua)?'firefox':/Safari/.test(ua)?'safari':'other';
+ return `${os}/${app||browser}`;
+})();
+const clientDiag=ClientDiag.create({storage:resultStorage,context:()=>({
+ gapMs:Date.now()-lastPacketAt,rttMs:clockSamples[clockSamples.length-1]?.rtt,minRttMs:clockSamples.length?Math.min(...clockSamples.map(s=>s.rtt)):undefined,
+ fps:lastFps??undefined,maxFrameMs:takeLongestFrame(),state:roomState?.state,room:currentRoomId||undefined,hidden:document.hidden,attempts:reconnectAttempts,net:navigator.connection?.effectiveType
+})});
+let outageStartedAt=0,hiddenSince=0,lastDiagFlushAt=0;
+function noteOutage(reason,extra){outageStartedAt||=Date.now();clientDiag.record(reason,extra);}
+function flushDiagnostics(){
+ if(!serverFeatures.diag||ws?.readyState!==WebSocket.OPEN||!clientDiag.size)return;
+ lastDiagFlushAt=Date.now();ws.send(JSON.stringify({type:'CLIENT_DIAG',device:DIAG_DEVICE,events:clientDiag.take(10)}));
+}
+function finishOutage(reason){if(!outageStartedAt)return;clientDiag.record(reason,{outageMs:Date.now()-outageStartedAt});outageStartedAt=0;flushDiagnostics();}
+if(clientDiag.previous?.roomId&&Date.now()-clientDiag.previous.leftAt<300000)clientDiag.record('page-reloaded',{awayMs:Date.now()-clientDiag.previous.leftAt,detail:`이전 상태 ${clientDiag.previous.state||'-'}`});
+window.addEventListener('pagehide',()=>clientDiag.persist({leftAt:Date.now(),roomId:currentRoomId,state:roomState?.state}));
+window.addEventListener('error',event=>clientDiag.record('js-error',{detail:`${event.message} @${String(event.filename).split('/').pop()}:${event.lineno}`},{throttleMs:10000}));
+window.addEventListener('unhandledrejection',event=>clientDiag.record('js-error',{detail:`unhandled: ${event.reason?.message||event.reason}`},{throttleMs:10000}));
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){hiddenSince=Date.now();return;}
+ // Long app switches explain many "frozen" reports and the seat expiries that follow.
+ if(currentRoomId&&hiddenSince&&Date.now()-hiddenSince>5000)clientDiag.record('returned',{awayMs:Date.now()-hiddenSince});
+ hiddenSince=0;
+});
 function scheduleReconnect(minDelay=0){
  if(connectionPaused||reconnectTimer)return;
  const delay=Math.max(minDelay,Math.min(4000,250*2**Math.min(reconnectAttempts++,4)))+Math.random()*400;
@@ -1103,8 +1136,8 @@ function finishRecoveryFeedback(){
  if(Date.now()>=recoveryFeedbackUntil)return;recoveryFeedbackUntil=0;
  setRecoverButtons('done');connectionNotice(currentRoomId?'최신 게임 상태로 복구했어요.':'서버와 다시 연결됐어요.',2000);
 }
-window.recoverConnection=function(){
- if(recoveryTimer||Date.now()-lastRecoveryAt<1500)return;lastRecoveryAt=Date.now();connectionPaused=false;
+window.recoverConnection=function(source='button'){
+ if(recoveryTimer||Date.now()-lastRecoveryAt<1500)return;clientDiag.record('recover',{detail:source});lastRecoveryAt=Date.now();connectionPaused=false;
  recoveryFeedbackUntil=Date.now()+15000;setRecoverButtons('busy');
  recoveryTargetRoomId=currentRoomId||resumeSession?.roomId||pendingJoinRoomId;recoveryJoinFallback=false;
  renderedPhaseKey=null;roomStateSync.invalidate();worldUpdates.reset();handleWorldTick([]);myMoveTarget=null;resetJoystick();
@@ -1146,14 +1179,14 @@ function connectWebSocket(force=false) {
         break;
       }
 
-      case 'QUIZ_LIST':renderMyQuizzes(msg.quizzes||[]);if(!resumeSession&&!currentRoomId){connectionNotice('');reconnectAttempts=0;finishRecoveryFeedback();}break;
+      case 'QUIZ_LIST':renderMyQuizzes(msg.quizzes||[]);if(!resumeSession&&!currentRoomId){connectionNotice('');reconnectAttempts=0;finishRecoveryFeedback();finishOutage('reconnected');}break;
       case 'APP_PONG':
         if(Number.isFinite(msg.t)&&Number.isFinite(msg.serverNow))recordClockSample(msg.t,msg.serverNow);
         if(msg.roomId===currentRoomId)roomStateSync.observe(msg.stateVersion);
         break;
       case 'ROOM_SESSION_MISSING':
         stateRequestAt=0;
-        if(msg.roomId===currentRoomId)recoverConnection();
+        if(msg.roomId===currentRoomId)recoverConnection('session-missing');
         break;
       case 'PUBLIC_QUIZ_LIST':renderPublicQuizzes(msg.quizzes||[]);break;
       case 'QUIZ_SAVED':receiveSavedQuiz(msg);break;
@@ -1171,6 +1204,7 @@ function connectWebSocket(force=false) {
         closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;recoveryJoinFallback=false;
         reconnectAttempts=0;connectionPaused=false;
         connectionLive=true;latestWorldSeq=ackedWorldSeq=-1;serverSelfPos=null;stateRequestAt=0;
+        finishOutage(msg.resumed?'resumed':'rejoined');
         if(msg.resumed)connectionNotice('');
         myClientId=msg.clientId;
         restoredSubmission=msg.resumed&&msg.hasSubmitted?msg:null;
@@ -1186,6 +1220,7 @@ function connectWebSocket(force=false) {
         break;
       }
       case 'RESUME_REJECTED':
+        clientDiag.record('resume-rejected',{detail:msg.roomExists?'room-exists':'room-gone'});
         saveResumeSession(null);
         if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:msg.roomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
         closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryTargetRoomId=null;returnToLobby();connectionNotice('방이 종료되어 복귀할 수 없어요.',10000);setQuizStatus('방이 종료되어 복귀할 수 없어요.');break;
@@ -1211,7 +1246,7 @@ function connectWebSocket(force=false) {
           if(connectionLive)finishRecoveryFeedback();
         }catch(error){
           renderedPhaseKey=null;roomStateSync.invalidate();
-          console.warn('게임 화면 갱신 실패, 서버 상태 재확인:',error);
+          console.warn('게임 화면 갱신 실패, 서버 상태 재확인:',error);clientDiag.record('render-error',{detail:String(error?.message||error)},{throttleMs:10000});
         }
         if(restoredSubmission){
           if(msg.gameId===restoredSubmission.gameId&&msg.roundId===restoredSubmission.roundId&&msg.state==='QUESTION'){
@@ -1232,7 +1267,7 @@ function connectWebSocket(force=false) {
         roomStateSync.observe(msg.stateVersion);
         const players=worldUpdates.apply(msg);
         if(worldUpdates.needsSnapshot())roomStateSync.invalidate();
-        if(players)try{handleWorldTick(players);}catch(error){roomStateSync.invalidate();console.warn('월드 갱신 실패, 새 연결로 복구:',error);recoverConnection();}
+        if(players)try{handleWorldTick(players);}catch(error){roomStateSync.invalidate();console.warn('월드 갱신 실패, 새 연결로 복구:',error);clientDiag.record('world-error',{detail:String(error?.message||error)},{throttleMs:10000});recoverConnection('world-error');}
         break;
       }
 
@@ -1281,6 +1316,7 @@ function connectWebSocket(force=false) {
     quizAccessUntil=0;cancelQuizPassword();
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
     libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();
+    noteOutage('socket-closed',{code:event.code,detail:event.reason||undefined});
     if(event.code===4001){saveResumeSession(null);connectionPaused=true;returnToLobby({preserveResume:true});connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');return;}
     // The server holds the seat: keep the stage on screen and resume in place.
     const inRoom=!!currentRoomId;
@@ -1296,15 +1332,16 @@ function pollConnection(){
  const now=Date.now(),gap=now-lastPollAt;lastPollAt=now;
  if(connectionPaused||document.hidden||!ws)return;
  // A starved main thread (heavy frame, frozen page) is not evidence of a dead socket.
- if(gap>2500)lastPacketAt=Math.max(lastPacketAt,now-2000);
- if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>8000)hardRecoverConnection();return;}
+ if(gap>2500){lastPacketAt=Math.max(lastPacketAt,now-2000);clientDiag.record('main-thread-blocked',{blockedMs:gap},{throttleMs:30000});}
+ if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>8000){noteOutage('connect-timeout');hardRecoverConnection();}return;}
  if(ws.readyState!==WebSocket.OPEN){scheduleReconnect();return;}
- if(probeSince&&now-probeSince>2500&&lastPacketAt<probeSince){probeSince=0;hardRecoverConnection();return;}
- if(now-lastPacketAt>STALL_MS){hardRecoverConnection();return;}
+ if(probeSince&&now-probeSince>2500&&lastPacketAt<probeSince){probeSince=0;noteOutage('wake-probe-timeout');hardRecoverConnection();return;}
+ if(now-lastPacketAt>STALL_MS){noteOutage('stall');hardRecoverConnection();return;}
  if(serverFeatures.liveSync&&now-lastPingAt>=PING_INTERVAL_MS){lastPingAt=now;ws.send(JSON.stringify({type:'APP_PING',t:now}));}
  if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now())){ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));stateRequestAt||=now;}
  // Pongs can trickle through a jammed pipe; an unanswered state request cannot.
- if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;hardRecoverConnection();}
+ if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;noteOutage('state-timeout');hardRecoverConnection();return;}
+ if((connectionLive||libraryReady)&&now-lastDiagFlushAt>5000)flushDiagnostics();
 }
 setInterval(pollConnection,500);
 // Acknowledged ticks let the server pause the world stream for a phone that is behind
@@ -1970,7 +2007,9 @@ function wakeConnection(){
  roomStateSync.invalidate();lastPollAt=Date.now();
  if(connectionPaused)return;
  if(!ws||ws.readyState===WebSocket.CLOSED){connectWebSocket();return;}
- if(ws.readyState===WebSocket.OPEN){probeSince=Date.now();lastPingAt=0;}
+ // Nothing is pinged (and no world ticks arrive) while hidden, so old silence proves
+ // nothing; the probe ping alone decides whether this socket survived.
+ if(ws.readyState===WebSocket.OPEN){probeSince=Date.now();lastPingAt=0;lastPacketAt=Math.max(lastPacketAt,Date.now()-3000);}
  pollConnection();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wakeConnection();});

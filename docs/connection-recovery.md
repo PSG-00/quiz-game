@@ -34,3 +34,26 @@
 재현 검증: `node scripts/audit-connection-recovery.cjs`는 격리 포트 3147에서 PC·모바일 화면과 43개 WebSocket 클라이언트(총 45명)를 사용한다. 전환 패킷 누락과 rAF 정지, 수동 복구, 응답 없는 연결, 늦은 close, 중복 창 교체, 만료 타이머 유실, 만료 후 관전 입장, 42개 동시 재접속을 검증한다. 실제 폰 45대의 무선망이나 발생 당시의 운영 로그를 재현한 것은 아니다.
 
 운영 로그의 `CONNECTION_CLOSED`(접속 유지 초·흐름 제어로 건너뛴 틱 수 포함), `SESSION_RESTORED`, `SESSION_EXPIRED`, `LIVE_ROOMS_RESTORED`, `ROOM_PHASE_OVERDUE`, `ROOM_PHASE_FAILED`에는 방·사용자 식별자와 종료 코드가 남는다. 비밀번호·세션 토큰·답안은 기록하지 않는다.
+
+## 진단 로그
+
+서버의 모든 로그 줄은 `2026-10-27 15:42:01.123 KST`처럼 한국 시각으로 시작한다. PM2 설정과 무관하게 앱이 직접 찍으므로 로그 파일만으로 같은 초에 끊긴 사람들을 맞춰 볼 수 있다.
+
+휴대폰은 아래 상황을 기록해 두었다가 연결이 살아나면 5초 간격으로 묶어 보내고, 서버는 한 건당 한 줄의 `CLIENT_DIAG`로 남긴다. 보내지 못한 기록은 새로고침해도 남아 다음 접속에서 보낸다.
+
+| reason | 뜻 |
+|---|---|
+| `stall` | 6초 동안 어떤 패킷도 오지 않아 연결을 교체함 |
+| `state-timeout` | 마감이 지난 뒤 요청한 게임 상태가 4초 안에 오지 않음 |
+| `connect-timeout` | 새 연결이 8초 안에 열리지 않음 |
+| `wake-probe-timeout` | 화면 복귀·네트워크 변경 직후 확인 핑에 2.5초 안에 답이 없음 |
+| `socket-closed` | 연결이 닫힘(`code`: 1006 망 끊김, 1001 페이지 이탈·정리, 1012 서버 재시작, 4001 다른 창) |
+| `resumed` / `rejoined` / `reconnected` | 같은 자리 복귀 / 자리 재입장 / 로비 재연결. `outageMs`는 끊김부터 복귀까지 걸린 시간 |
+| `resume-rejected` | 복귀 거절(`room-gone`: 방 없음, `room-exists`: 자리 만료) |
+| `recover` | 연결 복구 실행(`button`: 사용자가 누름, `session-missing`·`world-error`: 자동) |
+| `main-thread-blocked` | 화면 스레드가 `blockedMs` 동안 멈춤. 기기 성능 부족의 직접 증거 |
+| `returned` | 다른 앱에 갔다가 `awayMs` 만에 돌아옴 |
+| `page-reloaded` | 게임 중 새로고침하거나 다시 열어 `awayMs` 만에 돌아옴 |
+| `render-error` / `world-error` / `js-error` | 화면 갱신·월드 갱신·스크립트 오류(`detail`에 메시지) |
+
+모든 항목에는 그 순간의 `gapMs`(마지막 패킷 이후 시간), `rttMs`·`minRttMs`(왕복 지연), `fps`, `maxFrameMs`(직전 보고 이후 가장 긴 프레임), `state`, `hidden`, `attempts`(재접속 시도), `net`(브라우저가 알려 주는 망 종류), `device`(예: `android/kakaotalk`, `ios/safari`), `ago`(기기 시계로 잰 경과 시간)가 함께 남는다. 연결당 5초에 한 묶음, 묶음당 10건까지만 받고 알려진 필드만 길이를 제한해 기록한다.
