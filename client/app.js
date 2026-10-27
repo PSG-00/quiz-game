@@ -1135,7 +1135,8 @@ function maybeSwitchToDirect(now){
  if(!directSwitchPending)return;
  if(ws?.oxPath!=='cf'){directSwitchPending=false;return;}
  if(!currentRoomId||!connectionLive||recoveryTimer||document.querySelector('dialog[open]:not(#rules-dialog)')||!DIRECT_SWITCH_STATES.has(roomState?.state))return;
- if(roomState.state==='BREAK'&&roomState.stateEndTime-(now-serverTimeOffset)<4000)return;
+ // A hung direct connect (4 s) plus the fallback must still end inside the break.
+ if(roomState.state==='BREAK'&&roomState.stateEndTime-(now-serverTimeOffset)<8000)return;
  directSwitchPending=false;lastDirectSwitchAt=now;
  clientDiag.record('direct-switch',{detail:roomState.state});
  hardRecoverConnection();
@@ -1188,6 +1189,11 @@ window.recoverConnection=function(source='button'){
 try{resumeSession=JSON.parse(sessionStorage.getItem('ox-room-session')||'null');}catch{}
 function saveResumeSession(value){resumeSession=value;try{if(value)sessionStorage.setItem('ox-room-session',JSON.stringify(value));else sessionStorage.removeItem('ox-room-session');}catch{}}
 function answerContext(){return {gameId:roomState?.gameId,roundId:roomState?.roundId};}
+let joinRequestId=null,joinWasAuto=false,joinSerial=0;
+function sendJoin(roomId,{auto=false}={}){
+ joinRequestId='join_'+(++joinSerial);joinWasAuto=auto;
+ ws.send(JSON.stringify({type:'JOIN_ROOM',roomId,requestId:joinRequestId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));
+}
 function connectWebSocket(force=false) {
   if(connectionPaused&&!force)return;
   if(!force&&ws&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(ws.readyState))return;
@@ -1212,10 +1218,13 @@ function connectWebSocket(force=false) {
         myClientId = msg.clientId;
         serverFeatures=msg.features||{};renderQuizBuilder();
         libraryReady=false;
+        socket.oxWelcomedAt=Date.now();
         ws.send(JSON.stringify({type:'AUTH_LIBRARY',token:libraryToken,legacyRoomTokens}));
-        if(pendingJoinRoomId&&pendingJoinRoomId!==resumeSession?.roomId){ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:pendingJoinRoomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));}
-        else if(resumeSession?.roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,...worldFlags()}));
-        pendingJoinRoomId=null;
+        // The room this tab should be in survives any number of JOIN/RESUME messages lost with a
+        // dropped connection: a held seat resumes by token, otherwise the same browser rejoins
+        // and the server hands its own seat back.
+        if(resumeSession?.roomId&&resumeSession?.resumeToken&&(!pendingJoinRoomId||pendingJoinRoomId===resumeSession.roomId))ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,...worldFlags()}));
+        else if(pendingJoinRoomId||currentRoomId||recoveryTargetRoomId)sendJoin(pendingJoinRoomId||currentRoomId||recoveryTargetRoomId,{auto:!pendingJoinRoomId});
         renderRoomList(msg.rooms || []);
         break;
       }
@@ -1243,6 +1252,8 @@ function connectWebSocket(force=false) {
 
       case 'JOINED_ROOM': {
         closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;recoveryJoinFallback=false;
+        pendingJoinRoomId=null;joinRequestId=null;
+        if(msg.hasSubmitted)confirmAnswer(msg.roundId,msg.ownAnswer);
         reconnectAttempts=0;connectionPaused=false;
         connectionLive=true;latestWorldSeq=ackedWorldSeq=-1;serverSelfPos=null;stateRequestAt=0;
         finishOutage(msg.resumed?'resumed':'rejoined');
@@ -1263,13 +1274,14 @@ function connectWebSocket(force=false) {
       case 'RESUME_REJECTED':
         clientDiag.record('resume-rejected',{detail:msg.roomExists?'room-exists':'room-gone'});
         saveResumeSession(null);
-        if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:msg.roomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
-        closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryTargetRoomId=null;returnToLobby();connectionNotice('방이 종료되어 복귀할 수 없어요.',10000);setQuizStatus('방이 종료되어 복귀할 수 없어요.');break;
+        if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;sendJoin(msg.roomId,{auto:true});connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
+        closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryTargetRoomId=null;pendingJoinRoomId=null;returnToLobby();connectionNotice('방이 종료되어 복귀할 수 없어요.',10000);setQuizStatus('방이 종료되어 복귀할 수 없어요.');break;
       case 'NOTICE':setQuizStatus(msg.message);break;
       case 'MOVE_CORRECTION':{
         if(msg.roomId!==currentRoomId)break;
         if(msg.roundId&&msg.roundId!==roomState?.roundId)break;
-        myPos={x:msg.x,z:msg.z};myMoveTarget=null;serverSelfPos={x:msg.x,z:msg.z};
+        // Keep a tapped destination (OX/구역): after the snap the character walks on to it.
+        myPos={x:msg.x,z:msg.z};if(raceActive)myMoveTarget=null;serverSelfPos={x:msg.x,z:msg.z};
         lastSentPosKey='';
         break;
       }
@@ -1277,7 +1289,7 @@ function connectWebSocket(force=false) {
       case 'ROOM_STATE': {
         if(msg.roomId!==currentRoomId)break;
         if(msg.recoveryRequestId&&msg.recoveryRequestId===recoveryRequestId){clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;}
-        if(msg.ownSubmission?.hasSubmitted)restoredSubmission={...msg.ownSubmission,ownAnswer:msg.ownSubmission.answer};
+        if(msg.ownSubmission?.hasSubmitted){restoredSubmission={...msg.ownSubmission,ownAnswer:msg.ownSubmission.answer};confirmAnswer(msg.ownSubmission.roundId,msg.ownSubmission.answer);}
         roomState = msg;stateRequestAt=0;
         if(!clockSynced)serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
         try{
@@ -1297,6 +1309,7 @@ function connectWebSocket(force=false) {
           }
           restoredSubmission=null;
         }
+        flushPendingAnswer();
         break;
       }
 
@@ -1328,12 +1341,16 @@ function connectWebSocket(force=false) {
         if(msg.roomId!==currentRoomId||msg.gameId!==roomState?.gameId||msg.roundId!==roomState?.roundId)break;
         const mine = playerEntities.get(myClientId);
         if (mine) { mine.hasSubmitted = true; mine.isEditing = false; }
+        confirmAnswer(msg.roundId,msg.answer);
         highlightSelectedMultiBtn(msg.answer);
         break;
       }
 
       case 'ERROR': {
-        if(recoveryJoinFallback){closeRetiringSockets();recoveryJoinFallback=false;recoveryTargetRoomId=null;returnToLobby();connectionNotice(msg.message||'재입장할 수 없어요.',10000);break;}
+        const joinFailed=Boolean(msg.requestId)&&msg.requestId===joinRequestId,autoJoinFailed=joinFailed&&joinWasAuto;
+        if(joinFailed){pendingJoinRoomId=null;joinRequestId=null;}
+        // An automatic rejoin that fails (room gone or full) is not something to alert about.
+        if(joinFailed&&(recoveryJoinFallback||autoJoinFailed&&currentRoomId)){closeRetiringSockets();recoveryJoinFallback=false;recoveryTargetRoomId=null;returnToLobby();connectionNotice(msg.message||'재입장할 수 없어요.',10000);break;}
         if(failGameResults(msg))break;
         if(quizAccessRequest===msg.requestId){quizAccessRequest=null;document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-error').textContent=msg.message;break;}
         if(msg.code==='QUIZ_LOAD_LOCKED'){quizAccessUntil=0;resetCodeLoad(msg.message);setQuizStatus(msg.message);break;}
@@ -1359,7 +1376,7 @@ function connectWebSocket(force=false) {
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
     libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();
     noteOutage('socket-closed',{code:event.code,detail:event.reason||undefined});
-    if(event.code===4001){saveResumeSession(null);connectionPaused=true;returnToLobby({preserveResume:true});connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');return;}
+    if(event.code===4001){saveResumeSession(null);connectionPaused=true;pendingJoinRoomId=null;recoveryTargetRoomId=null;returnToLobby({preserveResume:true});connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');return;}
     // The server holds the seat: keep the stage on screen and resume in place.
     const inRoom=!!currentRoomId;
     if(inRoom){resetJoystick();myMoveTarget=null;}
@@ -1383,6 +1400,10 @@ function pollConnection(){
  if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now())){ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));stateRequestAt||=now;}
  // Pongs can trickle through a jammed pipe; an unanswered state request cannot.
  if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;noteOutage('state-timeout');hardRecoverConnection();return;}
+ // The room screen is up on an open socket that never got JOINED_ROOM back (its JOIN or
+ // RESUME went down with an earlier connection): start over rather than wait forever.
+ if(currentRoomId&&!connectionLive&&ws.oxWelcomedAt&&now-ws.oxWelcomedAt>6000&&!recoveryTimer){ws.oxWelcomedAt=now;noteOutage('join-timeout');hardRecoverConnection();return;}
+ flushPendingAnswer();
  maybeSwitchToDirect(now);
  if((connectionLive||libraryReady)&&now-lastDiagFlushAt>5000)flushDiagnostics();
 }
@@ -1739,22 +1760,55 @@ window.moveToLane = function (laneNum) {
   if (!canAnswer()) return;
   const q = roomState.currentQuestion;
   if (q.type === 'MULTIPLE' && q.inputMode !== 'MOVE') {
-    ws.send(JSON.stringify({type: 'SUBMIT_MULTIPLE', answer: String(laneNum),...answerContext()}));
+    submitAnswer('SUBMIT_MULTIPLE',String(laneNum));
   } else {
     myMoveTarget = { x: [1, 3].includes(laneNum) ? -5 : 5, z: laneNum <= 2 ? -3 : 3 };
   }
 };
 
+// An answer or move needs about half a round trip to reach the server. Stop taking them that
+// much before its deadline, so the screen never accepts one the server will reject as late.
+function answerCutoff(){
+  const best=clockSamples.length?Math.min(...clockSamples.map(s=>s.rtt)):200;
+  return roomState.stateEndTime-Math.min(800,best/2+100);
+}
 function canAnswer() {
   const mine = playerEntities.get(myClientId);
-  return !!(currentRoomId && roomState?.state === 'QUESTION' && mine?.onStage && Date.now() - serverTimeOffset < roomState.stateEndTime);
+  return !!(currentRoomId && roomState?.state === 'QUESTION' && mine?.onStage && Date.now() - serverTimeOffset < answerCutoff());
+}
+// An answer is kept until the server confirms it (ANSWER_ACK, or its own submission in the
+// state sent on resume). A tap while the socket was reconnecting or silently dead used to show
+// "submitted" although the server never got it; now it goes out once the seat is back.
+let pendingAnswer=null;
+function submitAnswer(type,answer){
+  pendingAnswer={type,answer,...answerContext(),createdAt:Date.now(),sentAt:0,slow:false};
+  flushPendingAnswer();
+}
+function flushPendingAnswer(){
+  const p=pendingAnswer;if(!p)return;
+  if(roomState?.state!=='QUESTION'||roomState.roundId!==p.roundId||roomState.gameId!==p.gameId){
+    pendingAnswer=null;clientDiag.record('answer-unconfirmed',{detail:p.type});return;
+  }
+  const now=Date.now();
+  if(!p.slow&&now-p.createdAt>800){p.slow=true;showAnswerStatus(p,'전송 확인 중…');}
+  if(!connectionLive||ws?.readyState!==WebSocket.OPEN||now-p.sentAt<1500)return;
+  p.sentAt=now;ws.send(JSON.stringify({type:p.type,answer:p.answer,gameId:p.gameId,roundId:p.roundId}));
+}
+function confirmAnswer(roundId,answer){
+  const p=pendingAnswer;if(!p||p.roundId!==roundId||p.answer!==answer)return;
+  pendingAnswer=null;if(p.slow)showAnswerStatus(p,'');
+}
+function showAnswerStatus(p,status){
+  const preview=document.getElementById('my-submitted-preview');
+  if(p.type!=='SUBMIT_SHORT'||!preview||preview.classList.contains('hidden'))return;
+  preview.textContent=`제출한 답안: ${p.answer}${status?` · ${status}`:''}`;
 }
 function canMove() {
   // Moving while the seat is being resumed would only produce a correction snap-back.
   if (!currentRoomId || !connectionLive || isInputFocused()) return false;
   if(playerEntities.get(myClientId)?.eligible===false)return false;
   if (['WAITING','BREAK'].includes(roomState?.state)) return true;
-  if (roomState?.state !== 'QUESTION' || Date.now() - serverTimeOffset >= roomState.stateEndTime) return false;
+  if (roomState?.state !== 'QUESTION' || Date.now() - serverTimeOffset >= answerCutoff()) return false;
   const q = roomState.currentQuestion, mine = playerEntities.get(myClientId);
   return !!mine && (!mine.onStage || q.type==='RACE'&&!raceOwn?.rank&&raceOwn?.participant || q.type === 'OX' || q.type==='MINORITY' || q.type === 'MULTIPLE' && q.inputMode === 'MOVE');
 }
@@ -1763,7 +1817,6 @@ window.submitShortAnswer = function () {
   const input = document.getElementById('short-answer-input');
   const val = input.value.trim();
   if (!val || !ws || !canAnswer()) return;
-  ws.send(JSON.stringify({ type: 'SUBMIT_SHORT', answer: val,...answerContext() }));
   input.blur();
 
   const preview = document.getElementById('my-submitted-preview');
@@ -1771,6 +1824,7 @@ window.submitShortAnswer = function () {
     preview.textContent = `제출한 답안: ${val}`;
     preview.classList.remove('hidden');
   }
+  submitAnswer('SUBMIT_SHORT',val);
   playTone(698.46, 0.1);
 };
 
@@ -1803,8 +1857,7 @@ window.sendChatMessage = function () {
   if(playerEntities.get(myClientId)?.eligible===false)return;
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
-  if (!text || !ws) return;
-  ws.send(JSON.stringify({ type: 'CHAT', text }));
+  if (!text || !sendIfConnected({ type: 'CHAT', text },'연결을 다시 잡는 중이라 채팅을 보내지 못했어요.')) return;
   input.value = '';
   input.blur();
   closeChatPopup();
@@ -1816,13 +1869,21 @@ window.toggleSoundMute = function () {
   if (btn) btn.textContent = isMuted ? '🔇' : '🔊';
 };
 
+// While the socket is reconnecting, say so instead of throwing (CONNECTING) or silently
+// dropping (CLOSED) what the person just tapped.
+function sendIfConnected(message,notice){
+  if(ws?.readyState===WebSocket.OPEN){ws.send(JSON.stringify(message));return true;}
+  if(notice)connectionNotice(notice,3000);
+  return false;
+}
+
 window.startGame = function () {
-  if (ws) ws.send(JSON.stringify({ type: 'START_GAME' }));
+  sendIfConnected({ type: 'START_GAME' },'연결을 다시 잡는 중이에요. 잠시 후 다시 눌러 주세요.');
 };
 
 window.resetGame = function () {
   document.getElementById('winner-modal').classList.add('hidden');
-  if (ws) ws.send(JSON.stringify({ type: 'RESET_GAME' }));
+  sendIfConnected({ type: 'RESET_GAME' },'연결을 다시 잡는 중이에요. 잠시 후 다시 눌러 주세요.');
 };
 
 function returnToLobby({preserveResume=false}={}){
@@ -1840,8 +1901,10 @@ function returnToLobby({preserveResume=false}={}){
  document.getElementById('lobby-overlay').classList.remove('hidden');
  document.getElementById('rules-dialog').close();
  handleWorldTick([]);
+ // The server sends room lists to lobby screens only, so ask for a fresh one.
+ requestRoomList();
 }
-window.leaveRoom=function(){if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'LEAVE_ROOM'}));returnToLobby();};
+window.leaveRoom=function(){if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'LEAVE_ROOM'}));pendingJoinRoomId=null;recoveryTargetRoomId=null;returnToLobby();};
 
 function showWinnerModal(stateMsg) {
   const modal = document.getElementById('winner-modal');
@@ -1975,11 +2038,12 @@ function initNickname() {
 }
 
 window.joinRoom = function (roomId) {
-  const nickname = getPlayerNickname();
+  // Kept until JOINED_ROOM: a tap lost with a dropped connection is sent again on the next one.
+  pendingJoinRoomId=roomId;
   if (ws && ws.readyState === WebSocket.OPEN) {
     if(resumeSession?.roomId===roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,...worldFlags()}));
-    else ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId, nickname,avatarId:AvatarPicker.selected(),...worldFlags() }));
-  }else{pendingJoinRoomId=roomId;connectionPaused=false;connectWebSocket(true);connectionNotice('입장을 위해 연결을 복구하고 있어요…');}
+    else sendJoin(roomId);
+  }else{connectionPaused=false;connectWebSocket(true);connectionNotice('입장을 위해 연결을 복구하고 있어요…');}
 };
 
 window.submitCreateRoom=function(){
@@ -1998,9 +2062,10 @@ function escapeHtml(str) {
 }
 
 document.getElementById('short-answer-input').addEventListener('input', () => {
-  const field=document.getElementById('short-answer-input');field.value=Array.from(field.value).slice(0,QuizLimits.ANSWER).join('');
-  if (!canAnswer()) return;
-  ws.send(JSON.stringify({type: 'ANSWER_EDITING',...answerContext()}));
+  // Rewriting value on every keystroke can break Korean IME composition; trim only when too long.
+  const field=document.getElementById('short-answer-input'),chars=Array.from(field.value);
+  if(chars.length>QuizLimits.ANSWER)field.value=chars.slice(0,QuizLimits.ANSWER).join('');
+  if (!canAnswer()||!sendIfConnected({type: 'ANSWER_EDITING',...answerContext()})) return;
   document.getElementById('my-submitted-preview').textContent = '수정 중 · 다시 제출하면 답안이 변경돼요';
 });
 

@@ -206,10 +206,10 @@ class Room {
 
   disconnectPlayer(id,onExpire,now=Date.now()){
     const p=this.players.get(id);if(!p||p.connected===false)return;
-    // Before the host starts a game there is no participation to reserve.
-    if(this.state==='WAITING'){this.removePlayer(id);onExpire?.();return;}
+    // The seat and the host role are held in every state, the waiting room included: a phone
+    // that blinks out as the host presses Start still plays, and a host who blinks out keeps
+    // the Start button. Only an expired seat (removePlayer) hands the host role on.
     p.connected=false;p.ws=null;p.disconnectedUntil=now+RECONNECT_GRACE_MS;
-    if(this.hostId===id)this.assignHost();
     p.onDisconnectExpire=onExpire;
     p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),RECONNECT_GRACE_MS);
     p.disconnectTimer.unref?.();
@@ -232,8 +232,13 @@ class Room {
     p.disconnectTimer=null;p.onDisconnectExpire=null;p.disconnectedUntil=null;p.connected=true;p.ws=ws;
     if(this.state==='WAITING'){p.eligible=true;p.alive=true;this.placePlayerInRoleZone(p);}
     p.moveCredit=Math.min(1.5,p.moveCredit??1.5);p.lastMoveAt=now;
-    if(!this.hostId||this.testBotIds?.has(this.hostId))this.assignHost();
+    if(this.isCreator(p))this.hostId=p.id;
+    else if(!this.hostId||this.testBotIds?.has(this.hostId))this.assignHost();
     return true;
+  }
+
+  // The browser that created the room gets the host role back whenever it returns.
+  isCreator(p){return Boolean(!this.testBotIds&&this.creatorHash&&p?.ownerHash===this.creatorHash);
   }
 
   getCurrentQuestion() {
@@ -342,7 +347,8 @@ class Room {
     this.state = 'COUNTDOWN';
 
     for (const p of this.players.values()) {
-      p.eligible=p.connected!==false;
+      // A held seat is on the roster: its player is usually back within seconds.
+      p.eligible=true;
       p.alive = p.eligible;
       p.submittedText = '';
       p.hasSubmitted = false;
@@ -707,7 +713,9 @@ class Room {
     const next=racing?RaceRules.move(p,target):target;
     p.x=next.x;p.z=next.z;if(racing)this.race.visit(p,now);
     if(racing)return Math.abs(next.x-nx)<.03&&Math.abs(next.z-nz)<.03;
-    return Math.hypot(next.x-nx,next.z-nz)<1;
+    // Budget-limited moves are accepted as they are: the client keeps resending its spot and
+    // the server catches up within a second. A correction here snapped players backwards.
+    return true;
   }
 
   chat(clientId,text){
@@ -784,8 +792,15 @@ class Room {
     });
 
     if(recipient){if(recipient.readyState===1)recipient.send(payload);}
-    else this.sendToAll(payload);
+    else{this.sendToAll(payload);if(this.roomEventTimer){clearTimeout(this.roomEventTimer);this.roomEventTimer=null;}}
     if(q?.type==='RACE'&&this.race){for(const p of this.players.values())if(!recipient||p.ws===recipient)this.race.send(p);}
+  }
+
+  // Joins, drops and resumes only change counts: a burst of them (40 phones back after a
+  // restart) becomes one ROOM_STATE instead of forty queued in front of every slow phone.
+  broadcastRoomEventSoon(){
+    if(this.roomEventTimer)return;
+    this.roomEventTimer=setTimeout(()=>{this.roomEventTimer=null;this.broadcastRoomEvent();},250);this.roomEventTimer.unref?.();
   }
 
   getWorldPlayers() {
@@ -843,7 +858,7 @@ class Room {
   // Everything needed to continue this game in a new server process.
   snapshot(now=Date.now()){
     const players=[...this.players.values()].map(p=>({id:p.id,k:p.k,spawnSlot:p.spawnSlot,name:p.name,x:p.x,z:p.z,alive:p.alive,eligible:p.eligible,spriteSeed:p.spriteSeed,avatarId:p.avatarId,submittedText:p.submittedText,hasSubmitted:p.hasSubmitted,lastResult:p.lastResult,ownerHash:p.ownerHash||null,resumeTokenHash:p.resumeTokenHash||null,placedOnStage:p.placedOnStage,lastStagePosition:p.lastStagePosition||null,lastSpectatorPosition:p.lastSpectatorPosition||null,disconnectedUntil:p.connected===false?p.disconnectedUntil:null}));
-    return {id:this.id,title:this.title,hostId:this.hostId,ownerTokenHash:this.ownerTokenHash,createdAt:this.createdAt,targetWinners:this.targetWinners,restSeconds:this.restSeconds,questions:this.questions,
+    return {id:this.id,title:this.title,hostId:this.hostId,creatorHash:this.creatorHash||null,ownerTokenHash:this.ownerTokenHash,createdAt:this.createdAt,targetWinners:this.targetWinners,restSeconds:this.restSeconds,questions:this.questions,
       nextSpawnSlot:this.nextSpawnSlot,nextPlayerKey:this.nextPlayerKey,players,roundParticipants:[...this.roundParticipants],minorityOutcome:this.minorityOutcome,race:this.race?.snapshot()||null,
       lastEliminatedForFinal:this.lastEliminatedForFinal,runnerUpLottery:this.runnerUpLottery,state:this.state,gameId:this.gameId,roundId:this.roundId,currentQuestionIndex:this.currentQuestionIndex,
       remainingMs:this.stateEndTime>0?Math.max(0,this.stateEndTime-now):0,pending:this.pending,lastNotice:this.lastNotice,hostSpeech:this.hostSpeech,winners:this.winners,allFinalSurvivors:this.allFinalSurvivors,stateVersion:this.stateVersion||0,recordedGameId:this.recordedGameId||null};
@@ -851,7 +866,7 @@ class Room {
 
   static restore(data,{now=Date.now(),onExpire=null}={}){
     const room=new Room({title:data.title,targetWinners:data.targetWinners,restSeconds:data.restSeconds,questions:data.questions,ownerTokenHash:data.ownerTokenHash,createdAt:data.createdAt},data.hostId);
-    Object.assign(room,{id:data.id,nextSpawnSlot:data.nextSpawnSlot||0,nextPlayerKey:data.nextPlayerKey||1,minorityOutcome:data.minorityOutcome||null,lastEliminatedForFinal:data.lastEliminatedForFinal||[],runnerUpLottery:data.runnerUpLottery||null,
+    Object.assign(room,{id:data.id,creatorHash:data.creatorHash||null,nextSpawnSlot:data.nextSpawnSlot||0,nextPlayerKey:data.nextPlayerKey||1,minorityOutcome:data.minorityOutcome||null,lastEliminatedForFinal:data.lastEliminatedForFinal||[],runnerUpLottery:data.runnerUpLottery||null,
       state:data.state,gameId:data.gameId,roundId:data.roundId,currentQuestionIndex:data.currentQuestionIndex,lastNotice:data.lastNotice,hostSpeech:data.hostSpeech,winners:data.winners||[],allFinalSurvivors:data.allFinalSurvivors||[],stateVersion:data.stateVersion||0,recordedGameId:data.recordedGameId||null});
     room.roundParticipants=new Set(data.roundParticipants||[]);
     for(const saved of data.players||[]){

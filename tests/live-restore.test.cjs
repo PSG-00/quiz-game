@@ -67,10 +67,12 @@ test('단계 실패: 상품이 걸린 게임은 자동 종료하지 않고 상�
  broken=false;r.runPending();assert.equal(r.state,'JUDGE');assert.equal(messages.at(-1).state,'JUDGE');
 });
 
-test('늦게 몰린 이동은 예산만큼 반영하고 순간이동만 거절',t=>{
+test('늦게 몰린 이동은 예산만큼 반영하고(되돌림 없음) 순간이동만 거절',t=>{
  const r=playing(t);r.currentQuestionIndex=1;r.questions[1].type='OX';r.state='QUESTION';r.stateEndTime=Date.now()+10000;
  const a=r.players.get('a');a.x=0;a.z=0;a.moveCredit=0;a.lastMoveAt=1000;
- assert.equal(r.movePlayer('a',2,0,{enforceSpeed:true,now:1100}),false);assert.ok(a.x>0&&a.x<1.2);
+ // Accepted without a correction: the client keeps resending its spot and the server catches up.
+ assert.equal(r.movePlayer('a',2,0,{enforceSpeed:true,now:1100}),true);assert.ok(a.x>0&&a.x<1.2);
+ assert.equal(r.movePlayer('a',2,0,{enforceSpeed:true,now:1400}),true);assert.equal(a.x,2);
  a.lastMoveAt=1000;a.moveCredit=3;assert.equal(r.movePlayer('a',a.x+.8,0,{enforceSpeed:true,now:1000}),true);
  const before=a.x;assert.equal(r.movePlayer('a',before-7,0,{enforceSpeed:true,now:5000}),false);assert.equal(a.x,before);
 });

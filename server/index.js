@@ -112,7 +112,13 @@ app.get('/api/recovered-draft',(req,res)=>{
 });
 const server=http.createServer(app),wss=new WebSocketServer({server,maxPayload:5*1024*1024});
 function send(ws,msg){if(ws.readyState===1)ws.send(JSON.stringify(msg));}
-function publishRooms(){const msg={type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()};for(const peer of wss.clients)send(peer,msg);}
+// Only lobby screens show the list (a client asks again when it returns to the lobby), and a
+// burst of joins or resumes becomes one list instead of one per change for every socket.
+let publishTimer=null;
+function publishRooms(){
+ if(publishTimer)return;
+ publishTimer=setTimeout(()=>{publishTimer=null;const msg={type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()};for(const peer of wss.clients)if(!peer.inRoom?.())send(peer,msg);},250);publishTimer.unref?.();
+}
 function validatePlayable(questions){
  if(!Array.isArray(questions)||!questions.length)throw new Error('문제를 한 개 이상 작성해 주세요.');
  for(let i=0;i<questions.length;i++){
@@ -146,9 +152,9 @@ function probeStaleOwnerSessions(targetOwnerHash,activeWs){
    if(p.ownerHash===targetOwnerHash&&p.ws&&p.ws!==activeWs){
     const oldWs=p.ws;
     if(oldWs.readyState!==1){oldWs.leaveRoom?.();continue;}
-    oldWs.isAlive=false;
+    oldWs.probeSentAt=Date.now();
     try{oldWs.ping();}catch{oldWs.leaveRoom?.();continue;}
-    const timer=setTimeout(()=>{if(oldWs.isAlive===false){oldWs.leaveRoom?.();try{oldWs.terminate();}catch{}}},1500);
+    const timer=setTimeout(()=>{if((oldWs.lastPongAt||0)<oldWs.probeSentAt){oldWs.leaveRoom?.();try{oldWs.terminate();}catch{}}},1500);
     timer.unref?.();
    }
   }
@@ -174,7 +180,8 @@ wss.on('connection',(ws,req)=>{
  let clientId='user_'+crypto.randomBytes(6).toString('hex'),currentRoom=null,ownerHash=null,quizLoadUntil=0;
  const limits=new RequestLimits(),connectedAt=Date.now();
  ws.clientAddress=clientAddress(req);ws.path=socketPath(req,directSocket);
- ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;});
+ ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;ws.lastPongAt=Date.now();});
+ ws.connectedAt=connectedAt;ws.inRoom=()=>Boolean(currentRoom);
  ws.detachRoom=()=>{currentRoom=null;};
  // Compact deltas and acknowledged flow control are opt-in, so cached old clients keep working.
  function configureWorld(msg){ws.worldDeltaEnabled=msg.worldDelta===true;ws.worldCompact=msg.worldCompact===true;ws.worldFlow=msg.worldFlow===true;ws.worldSnapshotRoom=null;ws.worldPaused=false;}
@@ -186,7 +193,7 @@ wss.on('connection',(ws,req)=>{
   if(room.players.get(clientId)?.ws!==ws)return;
   if(preserve)room.disconnectPlayer(clientId,()=>{roomManager.cleanupEmptyRooms();if(roomManager.getRoom(room.id))room.broadcastRoomEvent();publishRooms();});
   else room.removePlayer(clientId);
-  if(room.players.size)room.broadcastRoomEvent();
+  if(room.players.size)room.broadcastRoomEventSoon();
   roomManager.cleanupEmptyRooms();publishRooms();
  }
  ws.leaveRoom=()=>leave(true);
@@ -194,8 +201,12 @@ wss.on('connection',(ws,req)=>{
   send(ws,{type:'JOINED_ROOM',roomId:currentRoom.id,clientId:player.id,resumeToken:token,resumed,ownAnswer:player.submittedText,hasSubmitted:player.hasSubmitted,gameId:currentRoom.gameId,roundId:currentRoom.roundId});
  }
  function issueSession(player,resumed=false){const token=crypto.randomBytes(32).toString('hex');player.resumeTokenHash=resumeHash(token);joined(player,token,resumed);}
+ // A resume or rejoin that sat in a stalled connection (TCP retransmitting) arrives after the
+ // phone already took its seat back on a newer one. It must not evict that newer socket.
+ function newerSocketHolds(player){const held=player.ws;return Boolean(held&&held!==ws&&held.readyState===1&&(held.connectedAt||0)>connectedAt);}
  function restorePlayer(room,player,{resumeToken=null,msg={}}={}){
   if(player.connected===false&&Date.now()>=player.disconnectedUntil){room.expirePlayer(player.id);return false;}
+  if(newerSocketHolds(player))return false;
   if(currentRoom&&currentRoom!==room)leave();
   const oldWs=player.ws;
   if(oldWs&&oldWs!==ws){oldWs.detachRoom?.();oldWs.close(4001,'다른 탭에서 복귀했습니다.');}
@@ -203,12 +214,30 @@ wss.on('connection',(ws,req)=>{
   currentRoom=room;clientId=player.id;configureWorld(msg);
   if(resumeToken)joined(player,resumeToken,true);else issueSession(player,true);
   console.info('SESSION_RESTORED',JSON.stringify({roomId:room.id,clientId:player.id,path:ws.path}));
-  room.sendCurrentState(ws);room.broadcastRoomEvent();room.broadcastWorldTick();publishRooms();return true;
+  room.sendCurrentState(ws);room.broadcastRoomEventSoon();room.broadcastWorldTick();publishRooms();return true;
  }
  const matchesRound=msg=>currentRoom&&msg.gameId===currentRoom.gameId&&msg.roundId===currentRoom.roundId&&typeof msg.roundId==='string';
  send(ws,{type:'WELCOME',clientId,features:{liveSync:true,quizLoadPassword:quizLoadGuard.enabled,race:true,minority:true,breakTime:true,worldDelta:true,resume:true,roundBinding:true,stateSync:true,worldCompact:true,worldFlow:true,timeSync:true,restartResume:!disabled,results:true,diag:true},rooms:roomManager.getRoomListSummary()});
+ function move(msg){
+  if(!currentRoom||typeof msg.x!=='number'||typeof msg.z!=='number')return;
+  if(currentRoom.getCurrentQuestion()?.type==='RACE'&&currentRoom.state==='QUESTION'&&!matchesRound(msg))return;
+  const moved=currentRoom.movePlayer(clientId,Number(msg.x),Number(msg.z),{enforceSpeed:true});
+  if(moved===false){const p=currentRoom.players.get(clientId);send(ws,{type:'MOVE_CORRECTION',roomId:currentRoom.id,gameId:currentRoom.gameId,roundId:currentRoom.roundId,x:p.x,z:p.z});}
+ }
+ // A MOVE is an absolute spot, so after a stall only the newest matters. The limiter keeps
+ // that one for a moment instead of dropping it and leaving the server on an older spot.
+ let deferredMove=null,deferredTimer=null;
+ function deferMove(msg){
+  deferredMove=msg;if(deferredTimer)return;
+  deferredTimer=setTimeout(()=>{
+   deferredTimer=null;const next=deferredMove;deferredMove=null;
+   if(!next||ws.readyState!==1||shuttingDown)return;
+   if(limits.allow('move',30,20))move(next);else deferMove(next);
+  },120);deferredTimer.unref?.();
+ }
  ws.on('message',async raw=>{
-  if(!limits.allow('all',60,120))return;
+  if(shuttingDown)return;
+  if(!limits.allow('all',60,240))return;
   let msg;try{msg=JSON.parse(raw.toString());}catch{return;}
   if(!msg||typeof msg!=='object'||Array.isArray(msg)||typeof msg.type!=='string'){
    send(ws,{type:'ERROR',message:'올바른 요청 형식이 아닙니다.'});return;
@@ -216,9 +245,9 @@ wss.on('connection',(ws,req)=>{
   try{
    if(currentRoom&&roomManager.getRoom(currentRoom.id)!==currentRoom)currentRoom=null;
    if(['JOIN_ROOM','RESUME_ROOM','GET_ROOMS'].includes(msg.type))roomManager.sweepExpired();
-   if(msg.type==='MOVE'&&!limits.allow('move',30,20))return;
+   if(msg.type==='MOVE'&&!limits.allow('move',30,20)){deferMove(msg);return;}
    if(msg.type==='WORLD_ACK'){
-    if(limits.allow('ack',10,10)&&Number.isInteger(msg.seq))ws.worldAckSeq=Math.max(ws.worldAckSeq||0,Math.min(msg.seq,ws.worldSentSeq||0));
+    if(Number.isInteger(msg.seq))ws.worldAckSeq=Math.max(ws.worldAckSeq||0,Math.min(msg.seq,ws.worldSentSeq||0));
     return;
    }
    // At most one batch every 5 s per connection keeps a misbehaving client from flooding the log.
@@ -294,7 +323,7 @@ wss.on('connection',(ws,req)=>{
      const draft=parse(JSON.stringify({version:1,title:msg.title,targetWinners:msg.targetWinners,restSeconds:msg.restSeconds,questions:msg.questions}));validatePlayable(draft.questions);
      leave();
      evictDuplicateOwner(ownerHash,clientId);
-     const room=roomManager.createRoom(draft,clientId);currentRoom=room;
+     const room=roomManager.createRoom(draft,clientId);currentRoom=room;room.creatorHash=ownerHash;
      configureWorld(msg);
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
      issueSession(player);room.broadcastRoomEvent();publishRooms();break;
@@ -302,6 +331,7 @@ wss.on('connection',(ws,req)=>{
     case 'JOIN_ROOM': {
      const room=roomManager.getRoom(msg.roomId);if(!room)throw new Error('이미 종료된 방입니다.');
      const ownPlayer=ownerHash&&[...room.players.values()].find(p=>p.ownerHash===ownerHash);
+     if(ownPlayer&&newerSocketHolds(ownPlayer))throw new Error('다른 연결에서 이미 이 방에 들어와 있어요.');
      // Explicit re-entry by the same browser restores its existing seat/role,
      // including when sessionStorage was lost. Never create a second reservation.
      if(ownPlayer&&restorePlayer(room,ownPlayer,{msg}))break;
@@ -316,15 +346,11 @@ wss.on('connection',(ws,req)=>{
      configureWorld(msg);
      if(inheritedHost||!room.hostId||!room.players.has(room.hostId))room.hostId=clientId;
      const player=room.addPlayer(clientId,msg.nickname||'참가자',ws,msg.avatarId);player.ownerHash=ownerHash;
-     if(inheritedHost)room.hostId=clientId;
+     if(inheritedHost||room.isCreator(player))room.hostId=clientId;
      issueSession(player);room.broadcastRoomEvent();publishRooms();break;
     }
     case 'LEAVE_ROOM':leave();send(ws,{type:'ROOM_LIST',rooms:roomManager.getRoomListSummary()});break;
-    case 'MOVE':if(currentRoom&&typeof msg.x==='number'&&typeof msg.z==='number'){
-     if(currentRoom.getCurrentQuestion()?.type==='RACE'&&currentRoom.state==='QUESTION'&&!matchesRound(msg))break;
-     const moved=currentRoom.movePlayer(clientId,Number(msg.x),Number(msg.z),{enforceSpeed:true});
-     if(moved===false){const p=currentRoom.players.get(clientId);send(ws,{type:'MOVE_CORRECTION',roomId:currentRoom.id,gameId:currentRoom.gameId,roundId:currentRoom.roundId,x:p.x,z:p.z});}
-    }break;
+    case 'MOVE':deferredMove=null;move(msg);break;
     case 'CHAT': {
      currentRoom?.chat(clientId,msg.text);break;
     }
@@ -346,6 +372,9 @@ wss.on('connection',(ws,req)=>{
 function shutdown(reason){
  if(shuttingDown)return;
  saveLiveRooms();shuttingDown=true;clearInterval(liveRoomsInterval);
+ // Nothing may change after the saved snapshot: no messages (above) and no phase timers.
+ // Otherwise an answer acknowledged in these last 400 ms, or a finish, is lost or doubled.
+ roomManager.close();
  console.info('SERVER_SHUTDOWN',JSON.stringify({reason,rooms:roomManager.rooms.size,clients:wss.clients.size}));
  // 1012 tells clients this is a restart: keep the game screen and resume the seat.
  for(const peer of wss.clients){try{peer.close(1012,'서버를 다시 시작하고 있어요.');}catch{}}

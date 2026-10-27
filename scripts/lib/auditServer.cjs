@@ -1,5 +1,6 @@
 // Isolated IPC-only test controls; never loaded by the production entry point.
 const {RoomManager}=require('../../server/RoomManager');let manager;
+const loopDelay=require('node:perf_hooks').monitorEventLoopDelay({resolution:10});loopDelay.enable();
 const original=RoomManager.prototype.createRoom;
 RoomManager.prototype.createRoom=function(...args){manager=this;return original.apply(this,args);};
 process.env.OX_DISABLE_PERSISTENCE='1';delete process.env.OX_PUBLIC_TEST_BOTS;
@@ -44,6 +45,10 @@ process.on('message',message=>{try{
   room.nextQuestion({skipPreparation:true});if(room.timerHandle)clearTimeout(room.timerHandle);room.broadcastWorldTick();result=view(room);
  }else if(message.command==='judge'){
   room.stateEndTime=Date.now();room.judgeQuestion();if(room.timerHandle)clearTimeout(room.timerHandle);room.broadcastWorldTick();result=view(room);
+ }else if(message.command==='health'){
+  const memory=process.memoryUsage();
+  result={loopP99Ms:loopDelay.percentile(99)/1e6,loopMaxMs:loopDelay.max/1e6,rssMb:memory.rss/1048576,heapMb:memory.heapUsed/1048576,cpuMs:(({user,system})=>(user+system)/1000)(process.cpuUsage())};
+  if(message.reset)loopDelay.reset();
  }else throw Error('Unknown audit command');
  process.send({id:message.id,result});
 }catch(error){process.send({id:message.id,error:error.message});}});

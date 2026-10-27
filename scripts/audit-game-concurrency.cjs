@@ -18,11 +18,14 @@ async function main(){
  child.on('message',m=>{const q=requests.get(m.id);if(!q)return;requests.delete(m.id);clearTimeout(q.timer);m.error?q.reject(Error(m.error)):q.resolve(m.result);});
  try{
   await until(async()=>{try{return (await fetch(base+'/api/rooms')).ok;}catch{return false;}});
-  const waitingHost=await connect(token()),waitingRoom=await create(waitingHost,'시작 전 즉시 퇴장'),waitingGuest=await connect();await join(waitingGuest,waitingRoom);
-  await close(waitingHost,true);const waiting=await until(async()=>{const r=await control('snapshot',{roomId:waitingRoom});return r?.players.length===1?r:null;});
-  assert.equal(waiting.hostId,waitingGuest.id);assert.equal(waiting.players[0].connected,true);
-  await close(waitingGuest,true);await until(async()=>!(await control('rooms')).some(r=>r.id===waitingRoom));
-  note('WAITING-01','PASS','게임 시작 전 연결 종료는 즉시 퇴장·자리 해제·방장 승계, 마지막 사람 종료 시 방 삭제',{});
+  const waitingToken=token(),waitingHost=await connect(waitingToken),waitingRoom=await create(waitingHost,'시작 전 자리 유지'),waitingGuest=await connect();await join(waitingGuest,waitingRoom);
+  const waitingProof=waitingHost.messages.find(m=>m.type==='JOINED_ROOM').resumeToken;
+  await close(waitingHost,true);const held=await until(async()=>{const r=await control('snapshot',{roomId:waitingRoom});return r?.players.find(p=>p.id===waitingHost.id)?.connected===false?r:null;});
+  assert.equal(held.players.length,2);assert.equal(held.hostId,waitingHost.id);
+  const waitingBack=await connect(waitingToken);send(waitingBack,{type:'RESUME_ROOM',roomId:waitingRoom,resumeToken:waitingProof,worldDelta:true});await until(()=>waitingBack.messages.some(m=>m.type==='JOINED_ROOM'));
+  const waiting=await control('snapshot',{roomId:waitingRoom});assert.equal(waitingBack.id,waitingHost.id);assert.equal(waiting.hostId,waitingHost.id);assert.equal(waiting.players.length,2);
+  await close(waitingBack);await close(waitingGuest);await until(async()=>!(await control('rooms')).some(r=>r.id===waitingRoom));
+  note('WAITING-01','PASS','게임 시작 전 연결 종료도 자리·방장을 유지하고 같은 자리로 복귀, 모두 나가면 방 삭제',{});
   // Same identity reconnects: record current behavior, not a claim of correctness.
   const identity=token(),a=await connect(identity),roomId=await create(a),other=await connect();await join(other,roomId);
   const initial=await control('question',{roomId,question:{type:'SHORT',answer:'서울'}});send(a,{type:'SUBMIT_SHORT',answer:'서울',...context(initial)});
@@ -45,8 +48,8 @@ async function main(){
     const extra=await connect();assert.equal((await join(extra,rid)).type,'ERROR');await close(extra);
     const stolen=await connect(token());send(stolen,{type:'RESUME_ROOM',roomId:rid,resumeToken:proof});await until(()=>stolen.messages.some(m=>m.type==='RESUME_REJECTED'));await close(stolen);
     const back=await connect(hostToken);send(back,{type:'RESUME_ROOM',roomId:rid,resumeToken:proof});await until(()=>back.messages.some(m=>m.type==='JOINED_ROOM'));assert.equal(back.id,host.id);
-    let snapshot=await control('snapshot',{roomId:rid});assert.equal(snapshot.players.length,50);assert.notEqual(snapshot.hostId,host.id);
-    note('RESERVE-01','PASS','만원 방에서 예약 자리를 지키고 본인만 복귀, 이전 방장 권한 회수 없음',{total:snapshot.players.length});
+    let snapshot=await control('snapshot',{roomId:rid});assert.equal(snapshot.players.length,50);assert.equal(snapshot.hostId,host.id);
+    note('RESERVE-01','PASS','만원 방에서 예약 자리를 지키고 본인만 복귀, 끊긴 동안에도 방장 유지',{total:snapshot.players.length});
     await close(back,true);await until(async()=>(await control('snapshot',{roomId:rid})).players.find(p=>p.id===back.id)?.connected===false);await control('expire',{roomId:rid,playerId:back.id});
     const lateBack=await connect(hostToken);send(lateBack,{type:'RESUME_ROOM',roomId:rid,resumeToken:proof});await until(()=>lateBack.messages.some(m=>m.type==='RESUME_REJECTED'));assert.equal((await join(lateBack,rid)).type,'JOINED_ROOM');
     snapshot=await control('snapshot',{roomId:rid});assert.equal(snapshot.players.find(p=>p.id===lateBack.id).eligible,false);assert.equal(snapshot.players.find(p=>p.id===lateBack.id).alive,false);
@@ -100,13 +103,27 @@ async function main(){
   const hostRound=await control('question',{roomId:rid,question:{type:'SHORT',answer:'서울'}});send(guest,{type:'SUBMIT_SHORT',answer:'서울',...context(hostRound)});
   await until(async()=>(await control('snapshot',{roomId:rid})).players.find(p=>p.id===guest.id).submitted);
   const ongoing=await control('snapshot',{roomId:rid});await close(host,true);
-  const inherited=await until(async()=>{const r=await control('snapshot',{roomId:rid});return r.hostId===guest.id?r:null;});
+  const inherited=await until(async()=>{const r=await control('snapshot',{roomId:rid});return r.players.find(p=>p.id===host.id)?.connected===false?r:null;});
+  assert.equal(inherited.hostId,host.id);
   assert.equal(inherited.gameId,ongoing.gameId);assert.equal(inherited.end,ongoing.end);assert.equal(inherited.state,'QUESTION');assert.equal(inherited.players.find(p=>p.id===guest.id).answer,'서울');
-  note('HOST-02','PASS','진행 중 방장 연결 종료 후 다음 참가자 승계, 문제·마감·답안 유지',{hostId:inherited.hostId,state:inherited.state,answer:inherited.players.find(p=>p.id===guest.id).answer});
+  note('HOST-02','PASS','진행 중 방장 연결 종료 후에도 방장 자리 유지(만료 시 승계), 문제·마감·답안 유지',{hostId:inherited.hostId,state:inherited.state,answer:inherited.players.find(p=>p.id===guest.id).answer});
   const firstJudge=await control('judge',{roomId:rid}),secondJudge=await control('judge',{roomId:rid});
   assert.deepEqual(secondJudge.players,firstJudge.players);assert.equal(secondJudge.state,firstJudge.state);
   note('JUDGE-01','PASS','같은 문제 판정을 두 번 호출해도 결과·생존 상태 유지',{state:firstJudge.state,result:firstJudge.players[0].result});
-  await control('expire',{roomId:rid,playerId:host.id});await close(guest);
+  assert.equal((await control('expire',{roomId:rid,playerId:host.id})).hostId,guest.id);await close(guest);
+  // A RESUME that sat in a stalled connection must not evict the newer one holding the seat.
+  const staleToken=token(),staleHost=await connect(staleToken),staleRoom=await create(staleHost,'지연 복귀 점검'),staleGuest=await connect();await join(staleGuest,staleRoom);
+  const staleProof=staleHost.messages.find(m=>m.type==='JOINED_ROOM').resumeToken,older=await connect(staleToken),newer=await connect(staleToken);
+  send(newer,{type:'RESUME_ROOM',roomId:staleRoom,resumeToken:staleProof,worldDelta:true});await until(()=>newer.messages.some(m=>m.type==='JOINED_ROOM'));
+  send(older,{type:'RESUME_ROOM',roomId:staleRoom,resumeToken:staleProof,worldDelta:true});await until(()=>older.messages.some(m=>m.type==='RESUME_REJECTED'));
+  await sleep(100);assert.equal(newer.socket.readyState,1);assert.equal((await control('snapshot',{roomId:staleRoom})).players.find(p=>p.id===staleHost.id).connected,true);
+  note('STALE-01','PASS','늦게 도착한 옛 연결의 복귀 요청이 새 연결의 자리를 빼앗지 않음',{});
+  // After a stall only the newest MOVE matters: a burst over the limiter still ends at its last spot.
+  await control('question',{roomId:staleRoom,question:{type:'OX',answer:'O'},duration:20000,positions:{[staleGuest.id]:{x:0,z:0}}});
+  for(let i=1;i<=40;i++)send(staleGuest,{type:'MOVE',x:-i*.03,z:0});
+  const settled=await until(async()=>{const p=(await control('snapshot',{roomId:staleRoom})).players.find(p=>p.id===staleGuest.id);return Math.abs(p.x+1.2)<.01?p:null;},3000);
+  note('MOVE-01','PASS','제한을 넘는 이동 묶음도 마지막 위치로 반영',{x:settled.x});
+  await Promise.all([older,newer,staleGuest].map(b=>close(b)));
   const sockets=await Promise.all(Array.from({length:60},()=>connect()));
   const over=new WebSocket('ws://127.0.0.1:'+port),closeCode=await new Promise((resolve,reject)=>{over.on('close',resolve);over.on('error',reject);});
   assert.equal(closeCode,1013);await Promise.all(sockets.map(b=>close(b)));note('SERVER-CAP-01','PASS','서버 전체 연결 상한 초과 시 새 연결 거절',{configuredLimit:60,closeCode});
