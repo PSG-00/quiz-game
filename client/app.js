@@ -98,7 +98,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'h
 InstancedAvatars.attach(scene,renderer);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(RenderBudget.pixelRatio(innerWidth,innerHeight,devicePixelRatio));
-renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = false;
@@ -114,10 +114,11 @@ const nicknamePosition = new THREE.Vector3();
 const badgePosition = new THREE.Vector3();
 
 // 부드럽고 따뜻한 스튜디오 조명
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+// three.js r155+ removed legacy lighting; ×π keeps the brightness tuned under r128.
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.55 * Math.PI);
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xfff9f4, 0.75);
+const dirLight = new THREE.DirectionalLight(0xfff9f4, 0.75 * Math.PI);
 dirLight.position.set(12, 42, 26);
 dirLight.castShadow = false;
 scene.add(dirLight);
@@ -626,7 +627,6 @@ function getOrCreatePlayerEntity(p) {
   overheadCanvas.width = 256;
   overheadCanvas.height = 128;
   const overheadTex = new THREE.CanvasTexture(overheadCanvas);
-  overheadTex.colorSpace = THREE.SRGBColorSpace;
 
   const overheadMat = new THREE.SpriteMaterial({
     map: overheadTex,
@@ -781,7 +781,8 @@ function measurePlayerChat(entity,width,height,badgeWidth,anchorX,badgeTop){
 }
 
 // ==================== 4. 디스플레이 주사율에 맞춘 최대 144 FPS 루프 ====================
-const clock = new THREE.Clock();
+// THREE.Clock is deprecated since r183; Timer is driven by the rAF timestamp.
+const clock = new THREE.Timer();
 const framePacing=FramePacing.create(144);
 const fpsMeter=document.getElementById('fps-meter');
 let fpsWindowStart=null,fpsFrames=0,fpsRoomId=null;
@@ -852,6 +853,7 @@ function animate(frameTime) {
   if(document.hidden){framePacing.accept(frameTime,true);return;}
   // rAF follows the browser/display refresh rate; never force a 60 Hz mobile cap.
   if(!framePacing.accept(frameTime))return;
+  clock.update(frameTime);
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
   const joystickEnabled=portraitScreen()&&canMove();
@@ -900,12 +902,14 @@ function animate(frameTime) {
     myPos.z = Math.max(minZ, Math.min(maxZ, myPos.z));
     if(raceActive&&myEntity?.onStage)myPos=RaceRules.move(beforeMove,myPos);
 
-    if (ws && ws.readyState === WebSocket.OPEN && now - lastSentPosTime > 55) {
-      lastSentPosTime = now;
+    // No MOVE before the server's own position arrived: the default spawn would be a teleport.
+    if (myEntity && ws && ws.readyState === WebSocket.OPEN && now - lastSentPosTime > 55) {
       // Match the server's coordinate precision; standing still needs no MOVE.
-      const positionKey = `${myEntity?.onStage}:${myPos.x.toFixed(2)}:${myPos.z.toFixed(2)}`;
-      if(positionKey !== lastSentPosKey){
-        lastSentPosKey = positionKey;
+      const positionKey = `${myEntity.onStage}:${myPos.x.toFixed(2)}:${myPos.z.toFixed(2)}`;
+      // A dropped or budget-limited MOVE would otherwise leave the server judging an old spot.
+      const diverged=!raceActive&&serverSelfPos&&now-lastSentPosTime>600&&Math.hypot(serverSelfPos.x-myPos.x,serverSelfPos.z-myPos.z)>.05;
+      if(positionKey !== lastSentPosKey||diverged){
+        lastSentPosTime = now;lastSentPosKey = positionKey;
         ws.send(JSON.stringify({ type: 'MOVE', x: myPos.x, z: myPos.z,...(raceActive?answerContext():{}) }));
       }
     }
@@ -1051,21 +1055,60 @@ let resumeSession=null;
 let restoredSubmission=null;
 let reconnectTimer=null,connectionPaused=false,lastPacketAt=Date.now(),lastPingAt=0,connectionStartedAt=0,reconnectAttempts=0,lastRecoveryAt=0,pendingJoinRoomId=null;
 let connectionNoticeTimer=null;
+// A seat is held on the server, so a silent socket is replaced quickly instead of waited on.
+const PING_INTERVAL_MS=2000,STALL_MS=6000;
+let connectionLive=false,lastPollAt=Date.now(),probeSince=0,stateRequestAt=0,latestWorldSeq=-1,ackedWorldSeq=-1,serverSelfPos=null;
+let clockSamples=[],clockSynced=false;
+function worldFlags(){return {worldDelta:true,worldCompact:true,worldFlow:true};}
+// Offset from the lowest-latency ping; ROOM_STATE arrival time includes queueing delay.
+function recordClockSample(sentAt,serverNow){
+ const now=Date.now(),rtt=now-sentAt;if(!(rtt>=0&&rtt<10000))return;
+ const sample={rtt,offset:now-rtt/2-serverNow,at:now};
+ clockSamples=clockSamples.filter(s=>now-s.at<60000&&Math.abs(s.offset-sample.offset)<1000).concat(sample).slice(-12);
+ serverTimeOffset=clockSamples.reduce((best,s)=>s.rtt<best.rtt?s:best).offset;clockSynced=true;
+}
+function scheduleReconnect(minDelay=0){
+ if(connectionPaused||reconnectTimer)return;
+ const delay=Math.max(minDelay,Math.min(4000,250*2**Math.min(reconnectAttempts++,4)))+Math.random()*400;
+ reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectWebSocket();},delay);
+}
 let recoveryTimer=null,recoveryRequestId=null,recoveryTargetRoomId=null,recoveryJoinFallback=false;
 const retiringSockets=new Set();
 function closeRetiringSockets(){for(const old of retiringSockets){try{old.close();}catch{}retiringSockets.delete(old);}}
 function hardRecoverConnection(){
- clearTimeout(recoveryTimer);recoveryTimer=null;pendingJoinRoomId=recoveryTargetRoomId||currentRoomId||resumeSession?.roomId||null;connectWebSocket(true);
+ clearTimeout(recoveryTimer);recoveryTimer=null;
+ // Keep the old socket until the new one has rejoined so a waiting room is never emptied.
+ recoveryTargetRoomId=recoveryTargetRoomId||currentRoomId||resumeSession?.roomId||null;
+ pendingJoinRoomId=recoveryTargetRoomId;connectWebSocket(true);
 }
+let connectionNoticeHoldUntil=0;
 function connectionNotice(text,duration=0){
+ // Routine clears (every ROOM_STATE) must not cut a timed message such as a recovery success.
+ if(!text&&Date.now()<connectionNoticeHoldUntil)return;
  const el=document.getElementById('connection-notice');el.textContent=text;el.hidden=!text;
+ connectionNoticeHoldUntil=text&&duration?Date.now()+duration:0;
  clearTimeout(connectionNoticeTimer);if(duration)connectionNoticeTimer=setTimeout(()=>{el.hidden=true;},duration);
+}
+// Recovery can finish in milliseconds; the buttons and a short notice make it visible.
+let recoverButtonTimer=null,recoveryFeedbackUntil=0;
+function setRecoverButtons(state){
+ for(const button of document.querySelectorAll('.recover-button')){
+  button.classList.toggle('is-recovering',state==='busy');button.classList.toggle('is-recovered',state==='done');button.setAttribute('aria-busy',String(state==='busy'));
+  button.querySelector('.recover-label').textContent=state==='busy'?'복구 중…':state==='done'?'연결됨':'연결 복구';
+ }
+ // A recovery that cannot finish (server down) stops spinning; reconnect attempts continue.
+ clearTimeout(recoverButtonTimer);recoverButtonTimer=state?setTimeout(()=>setRecoverButtons(''),state==='done'?1800:15000):null;
+}
+function finishRecoveryFeedback(){
+ if(Date.now()>=recoveryFeedbackUntil)return;recoveryFeedbackUntil=0;
+ setRecoverButtons('done');connectionNotice(currentRoomId?'최신 게임 상태로 복구했어요.':'서버와 다시 연결됐어요.',2000);
 }
 window.recoverConnection=function(){
  if(recoveryTimer||Date.now()-lastRecoveryAt<1500)return;lastRecoveryAt=Date.now();connectionPaused=false;
+ recoveryFeedbackUntil=Date.now()+15000;setRecoverButtons('busy');
  recoveryTargetRoomId=currentRoomId||resumeSession?.roomId||pendingJoinRoomId;recoveryJoinFallback=false;
  renderedPhaseKey=null;roomStateSync.invalidate();worldUpdates.reset();handleWorldTick([]);myMoveTarget=null;resetJoystick();
- connectionNotice('최신 게임 상태를 다시 받고 있어요…');
+ connectionNotice(currentRoomId?'최신 게임 상태를 다시 받고 있어요…':'서버와 다시 연결하고 있어요…');
  if(currentRoomId&&ws?.readyState===WebSocket.OPEN){recoveryRequestId='recover_'+Date.now();ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId,requestId:recoveryRequestId}));recoveryTimer=setTimeout(hardRecoverConnection,2500);}
  else hardRecoverConnection();
 };
@@ -1080,6 +1123,7 @@ function connectWebSocket(force=false) {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${location.host}`;
   const socket=ws=new WebSocket(wsUrl);libraryReady=false;connectionStartedAt=lastPacketAt=Date.now();lastPingAt=0;
+  connectionLive=false;probeSince=0;stateRequestAt=0;
   if(previous&&previous!==socket){quizAccessUntil=0;cancelQuizPassword();resetCodeLoad();pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();previous.onmessage=previous.onclose=previous.onerror=null;
     if(recoveryTargetRoomId&&previous.readyState===WebSocket.OPEN){retiringSockets.add(previous);setTimeout(()=>{if(retiringSockets.delete(previous))try{previous.close();}catch{}},10000);}
     else try{previous.close();}catch{}
@@ -1095,18 +1139,20 @@ function connectWebSocket(force=false) {
         serverFeatures=msg.features||{};renderQuizBuilder();
         libraryReady=false;
         ws.send(JSON.stringify({type:'AUTH_LIBRARY',token:libraryToken,legacyRoomTokens}));
-        if(pendingJoinRoomId&&pendingJoinRoomId!==resumeSession?.roomId){ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:pendingJoinRoomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),worldDelta:true}));}
-        else if(resumeSession?.roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,worldDelta:true}));
+        if(pendingJoinRoomId&&pendingJoinRoomId!==resumeSession?.roomId){ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:pendingJoinRoomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));}
+        else if(resumeSession?.roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,...worldFlags()}));
         pendingJoinRoomId=null;
         renderRoomList(msg.rooms || []);
         break;
       }
 
-      case 'QUIZ_LIST':renderMyQuizzes(msg.quizzes||[]);if(!resumeSession&&!currentRoomId){connectionNotice('');reconnectAttempts=0;}break;
+      case 'QUIZ_LIST':renderMyQuizzes(msg.quizzes||[]);if(!resumeSession&&!currentRoomId){connectionNotice('');reconnectAttempts=0;finishRecoveryFeedback();}break;
       case 'APP_PONG':
+        if(Number.isFinite(msg.t)&&Number.isFinite(msg.serverNow))recordClockSample(msg.t,msg.serverNow);
         if(msg.roomId===currentRoomId)roomStateSync.observe(msg.stateVersion);
         break;
       case 'ROOM_SESSION_MISSING':
+        stateRequestAt=0;
         if(msg.roomId===currentRoomId)recoverConnection();
         break;
       case 'PUBLIC_QUIZ_LIST':renderPublicQuizzes(msg.quizzes||[]);break;
@@ -1114,6 +1160,7 @@ function connectWebSocket(force=false) {
       case 'QUIZ_SAVE_CONFIRM':receiveSaveConfirmation(msg);break;
       case 'QUIZ_LOADED':receiveLoadedQuiz(msg);break;
       case 'QUIZ_LIBRARY_UNLOCKED':receiveQuizAccess(msg);break;
+      case 'RESULT_LIST':receiveGameResults(msg);break;
       case 'QUIZ_DELETED':receiveDeletedQuiz(msg.quizId);break;
       case 'ROOM_LIST': {
         renderRoomList(msg.rooms || []);
@@ -1123,6 +1170,8 @@ function connectWebSocket(force=false) {
       case 'JOINED_ROOM': {
         closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;recoveryJoinFallback=false;
         reconnectAttempts=0;connectionPaused=false;
+        connectionLive=true;latestWorldSeq=ackedWorldSeq=-1;serverSelfPos=null;stateRequestAt=0;
+        if(msg.resumed)connectionNotice('');
         myClientId=msg.clientId;
         restoredSubmission=msg.resumed&&msg.hasSubmitted?msg:null;
         if(msg.resumeToken)saveResumeSession({roomId:msg.roomId,resumeToken:msg.resumeToken});
@@ -1138,13 +1187,13 @@ function connectWebSocket(force=false) {
       }
       case 'RESUME_REJECTED':
         saveResumeSession(null);
-        if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:msg.roomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),worldDelta:true}));connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
+        if(msg.roomExists&&!recoveryJoinFallback){recoveryJoinFallback=true;recoveryTargetRoomId=msg.roomId;ws.send(JSON.stringify({type:'JOIN_ROOM',roomId:msg.roomId,nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));connectionNotice('기존 자리를 확인하고 같은 방에 다시 입장하고 있어요…');break;}
         closeRetiringSockets();clearTimeout(recoveryTimer);recoveryTimer=null;recoveryTargetRoomId=null;returnToLobby();connectionNotice('방이 종료되어 복귀할 수 없어요.',10000);setQuizStatus('방이 종료되어 복귀할 수 없어요.');break;
       case 'NOTICE':setQuizStatus(msg.message);break;
       case 'MOVE_CORRECTION':{
         if(msg.roomId!==currentRoomId)break;
         if(msg.roundId&&msg.roundId!==roomState?.roundId)break;
-        myPos={x:msg.x,z:msg.z};myMoveTarget=null;
+        myPos={x:msg.x,z:msg.z};myMoveTarget=null;serverSelfPos={x:msg.x,z:msg.z};
         lastSentPosKey='';
         break;
       }
@@ -1153,12 +1202,13 @@ function connectWebSocket(force=false) {
         if(msg.roomId!==currentRoomId)break;
         if(msg.recoveryRequestId&&msg.recoveryRequestId===recoveryRequestId){clearTimeout(recoveryTimer);recoveryTimer=null;recoveryRequestId=null;recoveryTargetRoomId=null;}
         if(msg.ownSubmission?.hasSubmitted)restoredSubmission={...msg.ownSubmission,ownAnswer:msg.ownSubmission.answer};
-        roomState = msg;
-        serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
+        roomState = msg;stateRequestAt=0;
+        if(!clockSynced)serverTimeOffset = Date.now() - (msg.serverNow || Date.now());
         try{
           handleRoomStateUpdate(msg);
           roomStateSync.accept(msg.stateVersion);
           connectionNotice('');reconnectAttempts=0;
+          if(connectionLive)finishRecoveryFeedback();
         }catch(error){
           renderedPhaseKey=null;roomStateSync.invalidate();
           console.warn('게임 화면 갱신 실패, 서버 상태 재확인:',error);
@@ -1178,6 +1228,7 @@ function connectWebSocket(force=false) {
       case 'WORLD_DELTA': {
         if(!currentRoomId)break;
         if(msg.roomId&&msg.roomId!==currentRoomId)break;
+        if(Number.isInteger(msg.seq))latestWorldSeq=Math.max(latestWorldSeq,msg.seq);
         roomStateSync.observe(msg.stateVersion);
         const players=worldUpdates.apply(msg);
         if(worldUpdates.needsSnapshot())roomStateSync.invalidate();
@@ -1207,6 +1258,7 @@ function connectWebSocket(force=false) {
 
       case 'ERROR': {
         if(recoveryJoinFallback){closeRetiringSockets();recoveryJoinFallback=false;recoveryTargetRoomId=null;returnToLobby();connectionNotice(msg.message||'재입장할 수 없어요.',10000);break;}
+        if(failGameResults(msg))break;
         if(quizAccessRequest===msg.requestId){quizAccessRequest=null;document.getElementById('quiz-password-submit').disabled=false;document.getElementById('quiz-password-error').textContent=msg.message;break;}
         if(msg.code==='QUIZ_LOAD_LOCKED'){quizAccessUntil=0;resetCodeLoad(msg.message);setQuizStatus(msg.message);break;}
         if(pendingCodeLoad?.requestId===msg.requestId){resetCodeLoad(msg.message||'코드를 확인해 주세요.');break;}
@@ -1224,25 +1276,43 @@ function connectWebSocket(force=false) {
 
   ws.onclose = (event) => {
     if(ws!==socket)return;
+    connectionLive=false;
     clearTimeout(recoveryTimer);recoveryTimer=null;
     quizAccessUntil=0;cancelQuizPassword();
     resetCodeLoad('서버 연결이 끊겼어요. 다시 연결된 뒤 불러와 주세요.');
-    if(event.code===4001){saveResumeSession(null);connectionPaused=true;connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');}
-    libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();returnToLobby({preserveResume:true});
-    if(!connectionPaused){connectionNotice('연결이 끊겼어요. 자리를 유지하며 다시 연결하고 있어요…');reconnectTimer=setTimeout(()=>connectWebSocket(),Math.min(5000,500*2**Math.min(reconnectAttempts++,3))+Math.random()*500);}
+    libraryReady=false;pendingQuizSaves.clear();creatingRoomRequestId=null;overwriteRequestId=null;document.getElementById('save-quiz-dialog').close();updateSaveButtons();
+    if(event.code===4001){saveResumeSession(null);connectionPaused=true;returnToLobby({preserveResume:true});connectionNotice('다른 창에서 접속해 이 창의 연결이 종료됐어요. 이 창을 사용하려면 연결 복구를 눌러 주세요.');return;}
+    // The server holds the seat: keep the stage on screen and resume in place.
+    const inRoom=!!currentRoomId;
+    if(inRoom){resetJoystick();myMoveTarget=null;}
+    else returnToLobby({preserveResume:true});
+    connectionNotice(event.code===1012?`서버를 업데이트하고 있어요. ${inRoom?'자리를 유지한 채 ':''}곧 다시 연결해요…`:`연결이 끊겼어요. ${inRoom?'자리를 유지하며 ':''}다시 연결하고 있어요…`);
+    scheduleReconnect(event.code===1012?1200:0);
   };
 }
 
 // Independent of requestAnimationFrame: rendering/input failures must not stop sync.
 function pollConnection(){
- const now=Date.now();if(connectionPaused||document.hidden||!ws)return;
- if(ws.readyState===WebSocket.CONNECTING&&now-connectionStartedAt>10000){recoverConnection();return;}
- if(ws.readyState!==WebSocket.OPEN){if(!reconnectTimer&&now-lastPacketAt>12000)recoverConnection();return;}
- if(now-lastPacketAt>12000){recoverConnection();return;}
- if(serverFeatures.liveSync&&now-lastPingAt>=5000){lastPingAt=now;ws.send(JSON.stringify({type:'APP_PING'}));}
- if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now()))ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));
+ const now=Date.now(),gap=now-lastPollAt;lastPollAt=now;
+ if(connectionPaused||document.hidden||!ws)return;
+ // A starved main thread (heavy frame, frozen page) is not evidence of a dead socket.
+ if(gap>2500)lastPacketAt=Math.max(lastPacketAt,now-2000);
+ if(ws.readyState===WebSocket.CONNECTING){if(now-connectionStartedAt>8000)hardRecoverConnection();return;}
+ if(ws.readyState!==WebSocket.OPEN){scheduleReconnect();return;}
+ if(probeSince&&now-probeSince>2500&&lastPacketAt<probeSince){probeSince=0;hardRecoverConnection();return;}
+ if(now-lastPacketAt>STALL_MS){hardRecoverConnection();return;}
+ if(serverFeatures.liveSync&&now-lastPingAt>=PING_INTERVAL_MS){lastPingAt=now;ws.send(JSON.stringify({type:'APP_PING',t:now}));}
+ if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now())){ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));stateRequestAt||=now;}
+ // Pongs can trickle through a jammed pipe; an unanswered state request cannot.
+ if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;hardRecoverConnection();}
 }
-setInterval(pollConnection,1000);
+setInterval(pollConnection,500);
+// Acknowledged ticks let the server pause the world stream for a phone that is behind
+// (or hidden) instead of queueing seconds of stale positions in front of game events.
+setInterval(()=>{
+ if(document.hidden||!connectionLive||!serverFeatures.worldFlow||ws?.readyState!==WebSocket.OPEN||latestWorldSeq<=ackedWorldSeq)return;
+ ackedWorldSeq=latestWorldSeq;ws.send(JSON.stringify({type:'WORLD_ACK',seq:latestWorldSeq}));
+},200);
 
 initQuizBuilder();
 initNickname();
@@ -1296,6 +1366,7 @@ function handleWorldTick(compactList) {
       myPos = { x: p.x, z: p.z }; myMoveTarget = null;
       entity.targetX = p.x; entity.targetZ = p.z;
     }
+    if (p.i === myClientId) serverSelfPos = { x: p.x, z: p.z };
     entity.zoneId = p.zId;
     entity.hasSubmitted = Boolean(p.h);
     if (p.t !== undefined) entity.submittedText = p.t;
@@ -1599,7 +1670,8 @@ function canAnswer() {
   return !!(currentRoomId && roomState?.state === 'QUESTION' && mine?.onStage && Date.now() - serverTimeOffset < roomState.stateEndTime);
 }
 function canMove() {
-  if (!currentRoomId || isInputFocused()) return false;
+  // Moving while the seat is being resumed would only produce a correction snap-back.
+  if (!currentRoomId || !connectionLive || isInputFocused()) return false;
   if(playerEntities.get(myClientId)?.eligible===false)return false;
   if (['WAITING','BREAK'].includes(roomState?.state)) return true;
   if (roomState?.state !== 'QUESTION' || Date.now() - serverTimeOffset >= roomState.stateEndTime) return false;
@@ -1825,8 +1897,8 @@ function initNickname() {
 window.joinRoom = function (roomId) {
   const nickname = getPlayerNickname();
   if (ws && ws.readyState === WebSocket.OPEN) {
-    if(resumeSession?.roomId===roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,worldDelta:true}));
-    else ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId, nickname,avatarId:AvatarPicker.selected(),worldDelta:true }));
+    if(resumeSession?.roomId===roomId&&resumeSession?.resumeToken)ws.send(JSON.stringify({type:'RESUME_ROOM',...resumeSession,...worldFlags()}));
+    else ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId, nickname,avatarId:AvatarPicker.selected(),...worldFlags() }));
   }else{pendingJoinRoomId=roomId;connectionPaused=false;connectWebSocket(true);connectionNotice('입장을 위해 연결을 복구하고 있어요…');}
 };
 
@@ -1834,7 +1906,7 @@ window.submitCreateRoom=function(){
  if(!validateQuizDraft()||!requireLibrary()||pendingQuizSaves.size||creatingRoomRequestId)return;
  saveQuizDraft();
  creatingRoomRequestId='create_'+(++saveSequence);updateSaveButtons();
- ws.send(JSON.stringify({type:'CREATE_ROOM',requestId:creatingRoomRequestId,...currentQuizPayload(),nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),worldDelta:true}));
+ ws.send(JSON.stringify({type:'CREATE_ROOM',requestId:creatingRoomRequestId,...currentQuizPayload(),nickname:getPlayerNickname(),avatarId:AvatarPicker.selected(),...worldFlags()}));
 };
 
 function escapeHtml(str) {
@@ -1892,8 +1964,15 @@ function updateQuestionScrollHint() {
 document.getElementById('q-main-text').addEventListener('scroll', updateQuestionScrollHint);
 new ResizeObserver(updateQuestionScrollHint).observe(document.getElementById('q-main-text'));
 
-// Mobile browsers may suspend a tab without closing its socket.
-function wakeConnection(){roomStateSync.invalidate();if(!connectionPaused&&(!ws||ws.readyState===WebSocket.CLOSED))connectWebSocket();pollConnection();}
+// Mobile browsers may suspend a tab without closing its socket: probe it right away
+// and replace it if nothing answers within a few seconds.
+function wakeConnection(){
+ roomStateSync.invalidate();lastPollAt=Date.now();
+ if(connectionPaused)return;
+ if(!ws||ws.readyState===WebSocket.CLOSED){connectWebSocket();return;}
+ if(ws.readyState===WebSocket.OPEN){probeSince=Date.now();lastPingAt=0;}
+ pollConnection();
+}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wakeConnection();});
 window.addEventListener('pageshow',wakeConnection);
 window.addEventListener('online',wakeConnection);

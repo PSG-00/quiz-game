@@ -8,6 +8,12 @@ class RaceRound{
   this.order=Object.freeze(order);
   for(const id of room.roundParticipants){this.runners.set(id,{order:this.order,progress:0,progressUpdatedAt:null,progressOrder:0,rank:0,seq:0,notice:'출발! 왼쪽 O · 오른쪽 X',lastGate:0});const p=room.players.get(id);Object.assign(p,Rules.START,{moveCredit:0,lastMoveAt:Date.now()});}
  }
+ // Plain data for a restarted server; the question supplies the items again.
+ snapshot(){return {quota:this.quota,order:[...this.order],finished:[...this.finished],qualified:this.qualified?[...this.qualified]:null,progressSequence:this.progressSequence,runners:[...this.runners].map(([id,r])=>[id,{...r,order:undefined}])};}
+ static restore(room,question,data){
+  const race=Object.create(RaceRound.prototype),order=Object.freeze([...data.order]);
+  return Object.assign(race,{room,items:question.raceQuestions,quota:data.quota,order,finished:[...data.finished],qualified:data.qualified?[...data.qualified]:null,progressSequence:data.progressSequence||0,runners:new Map(data.runners.map(([id,r])=>[id,{...r,order}]))});
+ }
  liveFinishers(){return this.finished.filter(id=>this.room.players.get(id)?.eligible!==false&&this.room.players.has(id));}
  passed(id){return (this.qualified||this.liveFinishers().slice(0,this.quota)).includes(id);}
  finalize(){

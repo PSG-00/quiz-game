@@ -4,7 +4,7 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
  const variant=new URLSearchParams(location.search).get('model')||'atlas',compact=['compact','atlas'].includes(variant);
  if(compact){const suffix=variant==='atlas'?'-atlas-v1':'-compact-v1';asset=asset.replace(/\.glb$/,suffix+'.glb');version+=suffix;}
  let template=null,error=null;
- const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,175,175,175,228,228,228,255,255,255]),4,1,THREE.RGBFormat);
+ const gradient=new THREE.DataTexture(new Uint8Array([105,105,105,255,175,175,175,255,228,228,228,255,255,255,255,255]),4,1,THREE.RGBAFormat);
  gradient.minFilter=gradient.magFilter=THREE.NearestFilter;gradient.generateMipmaps=false;gradient.needsUpdate=true;
  let ready;function load(){return ready||(ready=new Promise(resolve=>{
   new THREE.GLTFLoader().load(asset,async gltf=>{
@@ -28,7 +28,7 @@ function createBakedAvatarModel(asset,avatarId,version,{lazy=false}={}){
    if(!o.isMesh)return;
    const source=o.material;
    if(!bySource.has(source)){
-    const baked=Boolean(source.emissiveMap),options={color:baked?source.emissive.clone():source.color.clone(),map:baked?source.emissiveMap:source.map,side:source.side,skinning:Boolean(o.isSkinnedMesh),alphaTest:source.alphaTest,transparent:source.transparent,opacity:source.opacity,depthWrite:source.depthWrite};
+    const baked=Boolean(source.emissiveMap),options={color:baked?source.emissive.clone():source.color.clone(),map:baked?source.emissiveMap:source.map,side:source.side,alphaTest:source.alphaTest,transparent:source.transparent,opacity:source.opacity,depthWrite:source.depthWrite};
     const m=baked||source.isMeshBasicMaterial?new THREE.MeshBasicMaterial(options):new THREE.MeshToonMaterial({...options,gradientMap:gradient});
     m.userData.original=m.color.clone();bySource.set(source,m);materials.push(m);
    }

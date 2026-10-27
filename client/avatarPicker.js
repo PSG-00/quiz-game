@@ -39,8 +39,8 @@ window.AvatarPicker=(()=>{
   const dialog=document.getElementById('avatar-dialog');dialog.showModal();
   const canvas=document.getElementById('avatar-preview-canvas');
   if(!previewRenderer){
-   previewRenderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});previewRenderer.setPixelRatio(Math.min(devicePixelRatio,2));previewRenderer.outputEncoding=THREE.sRGBEncoding;
-   previewScene=new THREE.Scene();previewScene.add(new THREE.AmbientLight(0xffffff,.55));const key=new THREE.DirectionalLight(0xfff9f4,.75);key.position.set(-3,6,7);previewScene.add(key);
+   previewRenderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});previewRenderer.setPixelRatio(Math.min(devicePixelRatio,2));previewRenderer.outputColorSpace=THREE.SRGBColorSpace;
+   previewScene=new THREE.Scene();previewScene.add(new THREE.AmbientLight(0xffffff,.55*Math.PI));const key=new THREE.DirectionalLight(0xfff9f4,.75*Math.PI);key.position.set(-3,6,7);previewScene.add(key);
    previewCamera=new THREE.OrthographicCamera(-2,2,1.85,-1.85,.1,100);previewCamera.position.set(0,2.6,7);previewCamera.lookAt(0,1.5,0);
    const floor=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.05,.12,36),new THREE.MeshStandardMaterial({color:new THREE.Color(0xe2d6c1).convertSRGBToLinear()}));floor.position.y=-.05;previewScene.add(floor);
   }

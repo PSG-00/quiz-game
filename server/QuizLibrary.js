@@ -48,6 +48,21 @@ class QuizLibrary {
     }
     if(migrated)this.persist();
   }
+  fileSignature(){
+    try{const stat=fs.statSync(this.file);return `${stat.mtimeMs}:${stat.size}:${stat.ino}`;}
+    catch(error){if(error.code==='ENOENT')return 'missing';throw error;}
+  }
+  // Re-parse only when another process changed the file; every connection used to read it twice.
+  refresh(){
+    const signature=this.fileSignature();
+    if(signature!==this.loadedSignature){this.readSnapshot();this.loadedSignature=this.fileSignature();}
+  }
+  // Writes replace the file atomically, so a read never needs the cross-process lock.
+  withReadable(action){
+    if(!this.file||this.inStorage)return action();
+    try{this.refresh();}catch(error){this.loadedSignature=null;throw error;}
+    return action();
+  }
   withStorage(action){
     if(!this.file||this.inStorage)return action();
     fs.mkdirSync(path.dirname(this.file),{recursive:true});
@@ -68,7 +83,9 @@ class QuizLibrary {
       }
     }
     this.inStorage=true;
-    try{fs.writeFileSync(lock,String(process.pid));this.readSnapshot();return action();}
+    try{fs.writeFileSync(lock,String(process.pid));this.refresh();return action();}
+    // A failed write may leave memory ahead of disk; the next access re-reads the file.
+    catch(error){this.loadedSignature=null;throw error;}
     finally{
       this.inStorage=false;fs.closeSync(lock);
       for(let attempt=0;;attempt++){
@@ -91,8 +108,10 @@ class QuizLibrary {
     fs.writeFileSync(tmp,JSON.stringify({version:1,quizzes:[...this.quizzes.values()],deletedQuizIds:[...this.deletedQuizIds],usedCodes:[...this.usedCodes]},null,2),'utf8');
     if(fs.existsSync(this.file))fs.copyFileSync(this.file,this.file+'.bak');
     fs.renameSync(tmp,this.file);
+    this.loadedSignature=this.fileSignature();
   }
   claimLegacy(ownerHash,tokens={}){
+    if(!tokens||typeof tokens!=='object'||!Object.keys(tokens).length)return;
     return this.withStorage(()=>this.claimLegacyInside(ownerHash,tokens));
   }
   claimLegacyInside(ownerHash,tokens={}){
@@ -132,9 +151,9 @@ class QuizLibrary {
     for(const q of this.quizzes.values())if(q.id!==excludeId&&this.contentHash(q)===hash)return q;
     return null;
   }
-  list(ownerHash){return this.withStorage(()=>[...this.quizzes.values()].filter(q=>this.hasOwner(q,ownerHash)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>({id:q.id,code:q.code,title:q.title,questionCount:q.questions.length,targetWinners:q.targetWinners,updatedAt:q.updatedAt})));}
+  list(ownerHash){return this.withReadable(()=>[...this.quizzes.values()].filter(q=>this.hasOwner(q,ownerHash)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>({id:q.id,code:q.code,title:q.title,questionCount:q.questions.length,targetWinners:q.targetWinners,updatedAt:q.updatedAt})));}
   listPublic(){
-    return this.withStorage(()=>{
+    return this.withReadable(()=>{
       const seen=new Set();
       const list=[];
       for(const q of [...this.quizzes.values()].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))){
@@ -154,9 +173,9 @@ class QuizLibrary {
       return list;
     });
   }
-  get(ownerHash,id){return this.withStorage(()=>{const q=this.quizzes.get(id);if(!q||!this.hasOwner(q,ownerHash))throw new Error('내가 저장한 퀴즈만 불러올 수 있어요.');return {id:q.id,code:q.code,title:q.title,targetWinners:q.targetWinners,restSeconds:q.restSeconds??5,questions:JSON.parse(JSON.stringify(q.questions))};});}
+  get(ownerHash,id){return this.withReadable(()=>{const q=this.quizzes.get(id);if(!q||!this.hasOwner(q,ownerHash))throw new Error('내가 저장한 퀴즈만 불러올 수 있어요.');return {id:q.id,code:q.code,title:q.title,targetWinners:q.targetWinners,restSeconds:q.restSeconds??5,questions:JSON.parse(JSON.stringify(q.questions))};});}
   getByCode(value,ownerHash){
-    return this.withStorage(()=>{
+    return this.withReadable(()=>{
       const code=typeof value==='string'?value.trim().toUpperCase():'';
       if(!CODE_PATTERN.test(code))throw new Error('영문·숫자 6자리 코드를 확인해 주세요.');
       const quiz=[...this.quizzes.values()].find(q=>q.code===code);

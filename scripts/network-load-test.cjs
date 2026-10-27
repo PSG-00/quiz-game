@@ -3,6 +3,8 @@ const fs=require('node:fs'),crypto=require('node:crypto'),WebSocket=require('ws'
 const args=Object.fromEntries(process.argv.slice(2).map(a=>{const i=a.indexOf('=');return [a.slice(2,i),a.slice(i+1)];}));
 const base=new URL(args.url||'http://127.0.0.1:3105'),count=Number(args.clients||50),seconds=Number(args.seconds||30);
 if(![50,100].includes(count)||!Number.isFinite(seconds)||seconds<10||seconds>120)throw Error('Use --clients=50|100 --seconds=10..120');
+// --compact=1 opts into compact deltas plus acknowledged flow control, like the current client.
+const compact=args.compact==='1',worldFlags=compact?{worldDelta:true,worldCompact:true,worldFlow:true}:{worldDelta:true};
 const label=args.label||'test',report={label,url:base.origin,clients:count,seconds,createdAt:new Date().toISOString(),http:{statuses:{},failures:[],bytes:0},ws:{connected:0,joined:0,upgradeStatuses:{},errors:[],unexpectedCloses:[],receivedBytes:0,worldBytes:0,worldMessages:0,moves:0,latencyMs:[]},rooms:[]};
 const bots=[],timers=new Set();let measuring=false,cleaning=false;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -21,12 +23,16 @@ function connect(index,roomId){return new Promise(resolve=>{
  b.socket.on('message',raw=>{
   if(measuring)report.ws.receivedBytes+=raw.length;
   const world=raw.subarray(0,50).toString().includes('WORLD_');
+  if(world&&compact){const seq=/"seq":(\d+)/.exec(raw.subarray(0,120).toString());if(seq)b.seq=Math.max(b.seq??-1,Number(seq[1]));}
   if(world&&measuring){report.ws.worldBytes+=raw.length;report.ws.worldMessages++;if(!b.probe)return;}
   let m;try{m=JSON.parse(raw);}catch{return;}
-  if(m.type==='WELCOME'){b.id=m.clientId;if(roomId)send({type:'JOIN_ROOM',roomId,nickname:'검증봇'+index,avatarId:['woni','liv','minami','may','may-school','zena'][index%6],worldDelta:true});else send({type:'AUTH_LIBRARY',token:crypto.randomBytes(32).toString('hex')});}
-  if(m.type==='QUIZ_LIST'&&!roomId&&!b.creating){b.creating=true;send({type:'CREATE_ROOM',nickname:'검증봇'+index,avatarId:'woni',worldDelta:true,title:'[부하검증] '+label+' '+index,targetWinners:1,restSeconds:0,questions:[{type:'MINORITY',question:'네트워크 부하 검증',timeLimit:15}]});}
+  if(Number.isInteger(m.seq))b.seq=Math.max(b.seq??-1,m.seq);
+  if(m.type==='WELCOME'){b.id=m.clientId;if(roomId)send({type:'JOIN_ROOM',roomId,nickname:'검증봇'+index,avatarId:['woni','liv','minami','may','may-school','zena'][index%6],...worldFlags});else send({type:'AUTH_LIBRARY',token:crypto.randomBytes(32).toString('hex')});}
+  if(m.type==='QUIZ_LIST'&&!roomId&&!b.creating){b.creating=true;send({type:'CREATE_ROOM',nickname:'검증봇'+index,avatarId:'woni',...worldFlags,title:'[부하검증] '+label+' '+index,targetWinners:1,restSeconds:0,questions:[{type:'MINORITY',question:'네트워크 부하 검증',timeLimit:15}]});}
   if(m.type==='JOINED_ROOM'){b.roomId=m.roomId;b.joined=true;report.ws.joined++;if(!roomId)report.rooms.push(m.roomId);finish();}
   if(m.type==='ERROR'){report.ws.errors.push(m.message);finish();}
+  if(m.type==='WORLD_TICK')b.key=m.p?.find(p=>p.i===b.id)?.k;
+  if(world&&measuring&&b.probe&&m.m)for(let j=0;j<m.m.length;j+=3)if(m.m[j]===b.key){const key=(m.m[j+1]/100).toFixed(2)+':'+(m.m[j+2]/100).toFixed(2),sent=b.pending.get(key);if(sent){report.ws.latencyMs.push(performance.now()-sent);b.pending.delete(key);}}
   if(world&&measuring&&b.probe){const own=m.p?.find(p=>p.i===b.id);if(own&&own.x!==undefined&&own.z!==undefined){const key=own.x.toFixed(2)+':'+own.z.toFixed(2),sent=b.pending.get(key);if(sent){report.ws.latencyMs.push(performance.now()-sent);b.pending.delete(key);}}}
  });
 });}
@@ -50,7 +56,8 @@ async function main(){
     if(b.probe){b.pending.set(x.toFixed(2)+':'+z.toFixed(2),performance.now());if(b.pending.size>100)b.pending.delete(b.pending.keys().next().value);}
    }
   },100);timers.add(interval);
-  await sleep(seconds*1000);clearInterval(interval);timers.delete(interval);measuring=false;
+  const acks=setInterval(()=>{if(compact)for(const b of bots)if(b.socket.readyState===1&&b.seq>(b.acked??-1)){b.acked=b.seq;b.socket.send(JSON.stringify({type:'WORLD_ACK',seq:b.seq}));}},200);timers.add(acks);
+  await sleep(seconds*1000);clearInterval(interval);timers.delete(interval);clearInterval(acks);timers.delete(acks);measuring=false;
   report.ws.measuredSeconds=(performance.now()-start)/1000;report.ws.receivedBytesPerSecond=report.ws.receivedBytes/report.ws.measuredSeconds;
   const sorted=report.ws.latencyMs.sort((a,b)=>a-b);report.ws.latency={samples:sorted.length,p50:sorted[Math.floor(sorted.length*.5)]??null,p95:sorted[Math.floor(sorted.length*.95)]??null};delete report.ws.latencyMs;
  }finally{

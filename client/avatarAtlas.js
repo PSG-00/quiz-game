@@ -21,7 +21,7 @@ window.AvatarAtlas={async merge(asset,gltf){
    for(let level=0;level<3;level++){const src=level?(g.userData.lodIndices?.[level-1]||g.index):g.index;for(const index of src.array)indices[level].push(index+offset);}offset+=a.position.count;
   }
   for(const [name,array] of Object.entries(arrays))geometry.setAttribute(name,new T.BufferAttribute(array,name==='uv'?2:name.startsWith('skin')?4:3));geometry.setIndex(new T.BufferAttribute(new Uint32Array(indices[0]),1));geometry.userData.lodIndices=indices.slice(1).map(a=>new T.BufferAttribute(new Uint32Array(a),1));geometry.computeBoundingBox();geometry.computeBoundingSphere();
-  const material=parts[0].material.clone(),texture=textures[gi];texture.flipY=false;texture.encoding=T.sRGBEncoding;texture.wrapS=texture.wrapT=T.ClampToEdgeWrapping;
+  const material=parts[0].material.clone(),texture=textures[gi];texture.flipY=false;texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.ClampToEdgeWrapping;
   if(group.kind==='basic')material.emissiveMap=texture;else material.map=texture;
   const merged=new T.SkinnedMesh(geometry,material);merged.name='Atlas '+group.kind;merged.bind(skeleton,new T.Matrix4());replacements.push(merged);
  }

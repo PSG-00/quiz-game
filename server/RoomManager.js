@@ -15,6 +15,15 @@ const SPECTATOR_MAX_Z = 9.8;
 const SPECTATOR_HALF_W = 7.5;
 const JUDGE_DURATION_MS=3000;
 const MAX_ROOM_PLAYERS=50;
+// A dropped player keeps the seat (judged on the last position/answer) this long.
+const RECONNECT_GRACE_MS=30000;
+// After a server restart every seat is disconnected at once; give them time to return.
+const RESTORE_EXTENSION_MS=5000;
+const WORLD_TICK_MS=100;
+// Delayed MOVE packets arrive in bursts; allow ~0.4 s of 7 m/s movement at once.
+const MOVE_CREDIT_CAP=3;
+const MOVE_TELEPORT_LIMIT=6;
+const TIMED_STATES=['COUNTDOWN','PREPARING','QUESTION','JUDGE','BREAK','LOTTERY'];
 
 // 기본 제공 퀴즈 프리셋 (방 생성 시 바로 쓰거나 수정 가능)
 const DEFAULT_QUIZ_LIST = [
@@ -102,6 +111,8 @@ class Room {
     this.players = new Map();
     this.worldStream = new WorldStream();
     this.nextSpawnSlot = 0;
+    this.nextPlayerKey = 1;
+    this.pending = null;
     this.roundParticipants = new Set();
     this.minorityOutcome=null;
     this.race=null;
@@ -159,6 +170,7 @@ class Room {
 
     const player = {
       id,
+      k: this.nextPlayerKey++,
       spawnSlot: this.nextSpawnSlot++,
       name: String(name || '플레이어').slice(0, 14),
       ws,
@@ -196,10 +208,10 @@ class Room {
     const p=this.players.get(id);if(!p||p.connected===false)return;
     // Before the host starts a game there is no participation to reserve.
     if(this.state==='WAITING'){this.removePlayer(id);onExpire?.();return;}
-    p.connected=false;p.ws=null;p.disconnectedUntil=now+30000;
+    p.connected=false;p.ws=null;p.disconnectedUntil=now+RECONNECT_GRACE_MS;
     if(this.hostId===id)this.assignHost();
     p.onDisconnectExpire=onExpire;
-    p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),30000);
+    p.disconnectTimer=setTimeout(()=>this.expirePlayer(id),RECONNECT_GRACE_MS);
     p.disconnectTimer.unref?.();
   }
 
@@ -247,8 +259,82 @@ class Room {
     return list;
   }
 
+  // One pending phase transition at a time. It is plain data, so a restarted
+  // server (or the deadline watchdog) can run exactly what the timer would have.
+  schedule(action,delayMs,args={}){
+    if(this.timerHandle)clearTimeout(this.timerHandle);
+    const pending={...args,action};this.pending=pending;
+    this.timerHandle=setTimeout(()=>{if(this.pending===pending)this.runPending('timer');},delayMs);
+  }
+
+  clearPhaseTimer(){
+    if(this.timerHandle)clearTimeout(this.timerHandle);
+    this.timerHandle=null;this.pending=null;
+  }
+
+  runPending(source='timer'){
+    const pending=this.pending;if(!pending)return false;
+    this.clearPhaseTimer();
+    try{this.performPending(pending);this.phaseFailures=0;}
+    catch(error){
+      this.phaseFailures=(this.phaseFailures||0)+1;
+      console.error('ROOM_PHASE_FAILED',JSON.stringify({roomId:this.id,state:this.state,action:pending.action,source,failures:this.phaseFailures}),error);
+      // A prize game is never ended automatically: keep every result and retry, so a
+      // passing fault clears itself and a hotfix deploy continues the restored room.
+      this.stateEndTime=Date.now()+2000;this.schedule(pending.action,2000,pending);
+    }
+    return true;
+  }
+
+  performPending({action,reason,speech,notice,index}){
+    if(action==='next')this.nextQuestion({skipPreparation:true});
+    else if(action==='prepare')this.nextQuestion();
+    else if(action==='open')this.openQuestion();
+    else if(action==='judge')this.judgeQuestion();
+    else if(action==='break')this.breakBeforeNextQuestion();
+    else if(action==='retry'){this.currentQuestionIndex=index;this.breakBeforeNextQuestion();}
+    else if(action==='finish')this.finishOrLottery(reason);
+    else if(action==='ended')this.announceEnded(speech,notice);
+  }
+
+  // What the lost timer of the current phase would have done.
+  inferPending(){
+    if(this.state==='JUDGE'){
+      const alive=this.getAlivePlayers().length;
+      return alive>=1&&alive<=this.targetWinners?{action:'finish',reason:'생존 인원이 당첨 목표 이하라 종료합니다!'}:{action:'break'};
+    }
+    if(this.state==='LOTTERY'){const speech=`축하합니다! 최종 당첨자 ${this.winners.length}명이 확정되었습니다!`;return {action:'ended',speech,notice:speech};}
+    const action={COUNTDOWN:'next',PREPARING:'open',QUESTION:'judge',BREAK:'next'}[this.state];
+    return action?{action}:null;
+  }
+
+  // Deadlines are the source of truth; a lost or thrown timer must not freeze a room.
+  recoverOverduePhase(now=Date.now()){
+    if(!TIMED_STATES.includes(this.state)||!(this.stateEndTime>0)||now<this.stateEndTime+2000)return false;
+    if(!this.pending){const inferred=this.inferPending();if(!inferred)return false;this.pending=inferred;}
+    console.warn('ROOM_PHASE_OVERDUE',JSON.stringify({roomId:this.id,state:this.state,action:this.pending.action,lateMs:now-this.stateEndTime}));
+    return this.runPending('watchdog');
+  }
+
+  announceEnded(speech,notice=speech){
+    this.state='ENDED';this.hostSpeech=speech;this.lastNotice=notice;
+    this.recordEnded();
+    this.broadcastRoomEvent();
+  }
+
+  // One durable record per finished game for prize hand-out; it must never stop the game.
+  recordEnded(){
+    if(!this.gameId||this.recordedGameId===this.gameId||this.testBotIds)return;
+    this.recordedGameId=this.gameId;
+    const players=[...this.players.values()];
+    const record={at:new Date().toISOString(),roomId:this.id,gameId:this.gameId,title:this.title,questionCount:this.questions.length,targetWinners:this.targetWinners,
+      participants:players.filter(p=>p.eligible!==false).length,reason:this.lastNotice,
+      winners:this.winners.map(w=>({id:w.id,name:w.name,placement:w.placement||'WINNER',avatarId:this.players.get(w.id)?.avatarId||null}))};
+    try{this.onEnded?.(record);}catch(error){console.error('GAME_RESULT_FAILED',this.id,error);}
+  }
+
   startGame() {
-    if (this.timerHandle) clearTimeout(this.timerHandle);
+    this.clearPhaseTimer();
     this.minorityOutcome=null;
     this.lastEliminatedForFinal=[];this.runnerUpLottery=null;
     this.gameId = crypto.randomUUID();
@@ -273,11 +359,11 @@ class Room {
     this.stateEndTime = Date.now() + 3500;
 
     this.broadcastRoomEvent();
-    this.timerHandle = setTimeout(() => this.nextQuestion({skipPreparation:true}), 3500);
+    this.schedule('next',3500);
   }
 
   breakBeforeNextQuestion(){
-    if(this.timerHandle)clearTimeout(this.timerHandle);
+    this.clearPhaseTimer();
     let next=this.currentQuestionIndex+1;
     while(next<this.questions.length&&this.questions[next].isRevival&&this.getGhostPlayers().length===0)next++;
     if(next>=this.questions.length){this.finishOrLottery('최종 라운드 종료!');return;}
@@ -287,11 +373,11 @@ class Room {
     this.hostSpeech='잠깐 쉬면서 자유롭게 채팅해 주세요!';
     this.lastNotice='쉬는 시간이 끝나면 다음 문제가 시작됩니다.';
     this.broadcastRoomEvent();
-    this.timerHandle=setTimeout(()=>this.nextQuestion({skipPreparation:true}),this.restSeconds*1000);
+    this.schedule('next',this.restSeconds*1000);
   }
 
   nextQuestion({skipPreparation=false}={}) {
-    if (this.timerHandle) clearTimeout(this.timerHandle);
+    this.clearPhaseTimer();
     this.minorityOutcome=null;
     this.race=null;
     this.currentQuestionIndex++;
@@ -313,7 +399,7 @@ class Room {
       this.lastNotice = '현재 탈락자가 없어 다음 라운드로 넘어갑니다.';
       this.stateEndTime = Date.now() + 2800;
       this.broadcastRoomEvent();
-      this.timerHandle = setTimeout(() => this.nextQuestion(), 2800);
+      this.schedule('prepare',2800);
       return;
     }
 
@@ -329,7 +415,6 @@ class Room {
     }
 
     if(q.type==='RACE')this.race=new RaceRound(this,q);
-    const durationMs = q.timeLimit * 1000;
     this.stateEndTime = Date.now() + 1400;
 
     if(q.type==='RACE'){
@@ -352,23 +437,25 @@ class Room {
       this.lastNotice = '목표 이하면 즉시 종료 · 남은 생존자 전원 당첨';
     }
 
-    const openQuestion=()=>{
-      this.state = 'QUESTION';
-      this.stateEndTime = Date.now() + durationMs;
-      this.broadcastRoomEvent();
-      this.timerHandle = setTimeout(() => this.judgeQuestion(), durationMs);
-    };
-    if(skipPreparation)openQuestion();
-    else{this.broadcastRoomEvent();this.timerHandle=setTimeout(openQuestion,1400);}
+    if(skipPreparation)this.openQuestion();
+    else{this.broadcastRoomEvent();this.schedule('open',1400);}
+  }
+
+  openQuestion(){
+    const q=this.getCurrentQuestion();if(!q)return;
+    const durationMs=q.timeLimit*1000;
+    this.state='QUESTION';
+    this.stateEndTime=Date.now()+durationMs;
+    this.broadcastRoomEvent();
+    this.schedule('judge',durationMs);
   }
 
   // 정답 판정 및 인원 확정 (답안 평가와 인원 갱신을 한 번에 확정!)
   judgeQuestion() {
-    if (this.timerHandle) clearTimeout(this.timerHandle);
     const q = this.getCurrentQuestion();
-    if (!q) return;
-
-    if (this.state !== 'QUESTION') return;
+    // A late call outside the answer phase must not cancel the pending transition.
+    if (!q || this.state !== 'QUESTION') return;
+    this.clearPhaseTimer();
     this.state = 'JUDGE';
     this.stateEndTime = Date.now() + JUDGE_DURATION_MS;
 
@@ -436,14 +523,11 @@ class Room {
       // 부활전 이후 다음 라운드로 이동 (만약 부활전에서도 생존자가 여전히 0명이면 마지막 문제 재도전 또는 종료)
       const aliveAfterRevival = this.getAlivePlayers().length;
       if (aliveAfterRevival === 0) {
-        this.timerHandle = setTimeout(() => {
-          this.currentQuestionIndex--;
-          this.breakBeforeNextQuestion();
-        }, JUDGE_DURATION_MS);
+        this.schedule('retry',JUDGE_DURATION_MS,{index:this.currentQuestionIndex-1});
       } else if (aliveAfterRevival <= this.targetWinners) {
-        this.timerHandle = setTimeout(() => this.finishOrLottery('부활 결과 생존자가 목표 이하이므로 전원 당첨!'), JUDGE_DURATION_MS);
+        this.schedule('finish',JUDGE_DURATION_MS,{reason:'부활 결과 생존자가 목표 이하이므로 전원 당첨!'});
       } else {
-        this.timerHandle = setTimeout(() => this.breakBeforeNextQuestion(), JUDGE_DURATION_MS);
+        this.schedule('break',JUDGE_DURATION_MS);
       }
       return;
     }
@@ -471,7 +555,7 @@ class Room {
         isRevival: false,
         zeroWipeoutSaved: true
       });
-      this.timerHandle = setTimeout(() => this.finishOrLottery('전원 오답으로 직전 생존자 기준으로 종료합니다!'), JUDGE_DURATION_MS);
+      this.schedule('finish',JUDGE_DURATION_MS,{reason:'전원 오답으로 직전 생존자 기준으로 종료합니다!'});
       return;
     }
 
@@ -504,19 +588,15 @@ class Room {
     // 문제 결과 생존자가 1명 이상이고 목표 이하면 전원 당첨 후 종료합니다.
     // 다음 문제나 예약 부활전은 진행하지 않습니다.
     if (aliveNowCount >= 1 && aliveNowCount <= this.targetWinners) {
-      this.timerHandle = setTimeout(() => {
-        this.finishOrLottery(
-          `생존 인원(${aliveNowCount}명)이 당첨 목표(${this.targetWinners}명) 이하가 되어 즉시 종료합니다! 남은 생존자 전원 당첨!`
-        );
-      }, JUDGE_DURATION_MS);
+      this.schedule('finish',JUDGE_DURATION_MS,{reason:`생존 인원(${aliveNowCount}명)이 당첨 목표(${this.targetWinners}명) 이하가 되어 즉시 종료합니다! 남은 생존자 전원 당첨!`});
     } else {
-      this.timerHandle = setTimeout(() => this.breakBeforeNextQuestion(), JUDGE_DURATION_MS);
+      this.schedule('break',JUDGE_DURATION_MS);
     }
   }
 
   // 최종 종료 및 당첨/추첨 처리
   finishOrLottery(reasonText) {
-    if (this.timerHandle) clearTimeout(this.timerHandle);
+    this.clearPhaseTimer();
 
     const survivors = this.getAlivePlayers();
     this.allFinalSurvivors = survivors.map(p => ({
@@ -538,7 +618,7 @@ class Room {
       this.state='LOTTERY';this.stateEndTime=Date.now()+4200;
       this.hostSpeech=`생존자 ${survivors.length}명 우승 확정! 직전 라운드 생존자 중 준우승 ${seats}명을 추첨합니다!`;
       this.lastNotice=`우승 ${survivors.length}명 확정 · 남은 ${seats}자리는 직전 생존자 ${runners.length}명 중 준우승 추첨`;
-      this.broadcastRoomEvent();this.timerHandle=setTimeout(()=>{this.state='ENDED';this.hostSpeech=`우승 ${survivors.length}명 · 준우승 ${seats}명 확정! 축하합니다!`;this.lastNotice=this.hostSpeech;this.broadcastRoomEvent();},4200);return;
+      this.broadcastRoomEvent();this.schedule('ended',4200,{speech:`우승 ${survivors.length}명 · 준우승 ${seats}명 확정! 축하합니다!`});return;
     }
 
     // 최종 라운드 종료 후 생존 인원이 목표보다 많으면(survivors.length > targetWinners) 목표 인원만큼 추첨!
@@ -560,25 +640,20 @@ class Room {
       this.hostSpeech = `생존자 ${survivors.length}명 중 당첨 목표 ${this.targetWinners}명을 추첨합니다!`;
       this.lastNotice = `${reasonText} 목표 초과(${survivors.length}명)로 ${this.targetWinners}명을 추첨합니다!`;
       this.broadcastRoomEvent();
-
-      this.timerHandle = setTimeout(() => {
-        this.state = 'ENDED';
-        this.hostSpeech = `축하합니다! 최종 당첨자 ${this.winners.length}명이 확정되었습니다!`;
-        this.lastNotice = `🎉 추첨 완료! 최종 당첨자 ${this.winners.length}명 확정!`;
-        this.broadcastRoomEvent();
-      }, 4200);
+      this.schedule('ended',4200,{speech:`축하합니다! 최종 당첨자 ${this.winners.length}명이 확정되었습니다!`,notice:`🎉 추첨 완료! 최종 당첨자 ${this.winners.length}명 확정!`});
     } else {
       // 최종 종료 시 생존 인원이 목표 이하(1 <= survivors <= targetWinners)이면 전원 당첨!
       this.winners = [...this.allFinalSurvivors];
       this.state = 'ENDED';
       this.hostSpeech = `축하합니다! 남은 생존자 ${this.winners.length}명 전원 당첨입니다!`;
       this.lastNotice = `${reasonText} 🏆`;
+      this.recordEnded();
       this.broadcastRoomEvent();
     }
   }
 
   resetToWaiting() {
-    if (this.timerHandle) clearTimeout(this.timerHandle);
+    this.clearPhaseTimer();
     this.minorityOutcome=null;
     this.race=null;
     this.lastEliminatedForFinal=[];this.runnerUpLottery=null;
@@ -620,15 +695,19 @@ class Room {
     const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
     nx=ArenaRules.coordinate(clamp(nx,-halfW,halfW));
     nz=ArenaRules.coordinate(clamp(nz,racing?RaceRules.MIN_Z:onStage?STAGE_MIN_Z+.8:SPECTATOR_MIN_Z,onStage?STAGE_MAX_Z-.8:SPECTATOR_MAX_Z));
+    let target={x:nx,z:nz};
     if(enforceSpeed){
-      p.moveCredit=Math.min(2,(p.moveCredit??1.5)+Math.max(0,now-(p.lastMoveAt??now))*.0085);p.lastMoveAt=now;
+      p.moveCredit=Math.min(MOVE_CREDIT_CAP,(p.moveCredit??1.5)+Math.max(0,now-(p.lastMoveAt??now))*.0085);p.lastMoveAt=now;
       const distance=Math.hypot(nx-p.x,nz-p.z);
-      if(distance>p.moveCredit+.03)return false;
-      p.moveCredit=Math.max(0,p.moveCredit-distance);
+      if(distance>MOVE_TELEPORT_LIMIT)return false;
+      // A late burst moves as far as the budget allows instead of snapping the player back.
+      if(distance>p.moveCredit+.03){const f=p.moveCredit/distance;target={x:ArenaRules.coordinate(p.x+(nx-p.x)*f),z:ArenaRules.coordinate(p.z+(nz-p.z)*f)};}
+      p.moveCredit=Math.max(0,p.moveCredit-Math.hypot(target.x-p.x,target.z-p.z));
     }
-    const next=racing?RaceRules.move(p,{x:nx,z:nz}):{x:nx,z:nz};
+    const next=racing?RaceRules.move(p,target):target;
     p.x=next.x;p.z=next.z;if(racing)this.race.visit(p,now);
-    return Math.abs(next.x-nx)<.03&&Math.abs(next.z-nz)<.03;
+    if(racing)return Math.abs(next.x-nx)<.03&&Math.abs(next.z-nz)<.03;
+    return Math.hypot(next.x-nx,next.z-nz)<1;
   }
 
   chat(clientId,text){
@@ -721,6 +800,7 @@ class Room {
       const zone = onStage ? computeZone(qType, p.x, p.z) : '';
       playersCompact.push({
         i: p.id,
+        k: p.k,
         n: p.name,
         x: p.x,
         z: p.z,
@@ -759,17 +839,53 @@ class Room {
       }
     }
   }
+
+  // Everything needed to continue this game in a new server process.
+  snapshot(now=Date.now()){
+    const players=[...this.players.values()].map(p=>({id:p.id,k:p.k,spawnSlot:p.spawnSlot,name:p.name,x:p.x,z:p.z,alive:p.alive,eligible:p.eligible,spriteSeed:p.spriteSeed,avatarId:p.avatarId,submittedText:p.submittedText,hasSubmitted:p.hasSubmitted,lastResult:p.lastResult,ownerHash:p.ownerHash||null,resumeTokenHash:p.resumeTokenHash||null,placedOnStage:p.placedOnStage,lastStagePosition:p.lastStagePosition||null,lastSpectatorPosition:p.lastSpectatorPosition||null,disconnectedUntil:p.connected===false?p.disconnectedUntil:null}));
+    return {id:this.id,title:this.title,hostId:this.hostId,ownerTokenHash:this.ownerTokenHash,createdAt:this.createdAt,targetWinners:this.targetWinners,restSeconds:this.restSeconds,questions:this.questions,
+      nextSpawnSlot:this.nextSpawnSlot,nextPlayerKey:this.nextPlayerKey,players,roundParticipants:[...this.roundParticipants],minorityOutcome:this.minorityOutcome,race:this.race?.snapshot()||null,
+      lastEliminatedForFinal:this.lastEliminatedForFinal,runnerUpLottery:this.runnerUpLottery,state:this.state,gameId:this.gameId,roundId:this.roundId,currentQuestionIndex:this.currentQuestionIndex,
+      remainingMs:this.stateEndTime>0?Math.max(0,this.stateEndTime-now):0,pending:this.pending,lastNotice:this.lastNotice,hostSpeech:this.hostSpeech,winners:this.winners,allFinalSurvivors:this.allFinalSurvivors,stateVersion:this.stateVersion||0,recordedGameId:this.recordedGameId||null};
+  }
+
+  static restore(data,{now=Date.now(),onExpire=null}={}){
+    const room=new Room({title:data.title,targetWinners:data.targetWinners,restSeconds:data.restSeconds,questions:data.questions,ownerTokenHash:data.ownerTokenHash,createdAt:data.createdAt},data.hostId);
+    Object.assign(room,{id:data.id,nextSpawnSlot:data.nextSpawnSlot||0,nextPlayerKey:data.nextPlayerKey||1,minorityOutcome:data.minorityOutcome||null,lastEliminatedForFinal:data.lastEliminatedForFinal||[],runnerUpLottery:data.runnerUpLottery||null,
+      state:data.state,gameId:data.gameId,roundId:data.roundId,currentQuestionIndex:data.currentQuestionIndex,lastNotice:data.lastNotice,hostSpeech:data.hostSpeech,winners:data.winners||[],allFinalSurvivors:data.allFinalSurvivors||[],stateVersion:data.stateVersion||0,recordedGameId:data.recordedGameId||null});
+    room.roundParticipants=new Set(data.roundParticipants||[]);
+    for(const saved of data.players||[]){
+      // Every seat is held as if its player had just disconnected; resume tokens stay valid.
+      const p={...saved,ws:null,connected:false,isEditing:false,moveCredit:1.5,lastMoveAt:now,onDisconnectExpire:onExpire,disconnectedUntil:Math.max(Number(saved.disconnectedUntil)||0,now+RECONNECT_GRACE_MS)};
+      if(!Number.isInteger(p.k))p.k=room.nextPlayerKey++;
+      p.disconnectTimer=setTimeout(()=>room.expirePlayer(p.id),p.disconnectedUntil-now);p.disconnectTimer.unref?.();
+      room.players.set(p.id,p);
+    }
+    const q=room.getCurrentQuestion();
+    if(q?.type==='RACE'&&data.race)room.race=RaceRound.restore(room,q,data.race);
+    if(TIMED_STATES.includes(room.state)){
+      const delay=Math.max(0,Number(data.remainingMs)||0)+RESTORE_EXTENSION_MS,pending=data.pending||room.inferPending();
+      room.stateEndTime=now+delay;
+      if(pending)room.schedule(pending.action,delay,pending);
+    }
+    return room;
+  }
 }
 
 class RoomManager {
   constructor({startLoop=true}={}) {
     this.rooms=new Map();
-    this.worldInterval=startLoop?setInterval(()=>{for(const room of this.rooms.values())if(room.players.size)room.broadcastWorldTick();},66):null;
+    this.worldInterval=startLoop?setInterval(()=>{for(const room of this.rooms.values()){
+      if(!room.players.size)continue;
+      try{room.broadcastWorldTick();}catch(error){console.error('WORLD_TICK_FAILED',room.id,error);}
+    }},WORLD_TICK_MS):null;
     this.maintenanceInterval=startLoop?setInterval(()=>this.sweepExpired(),1000):null;
   }
-  createRoom(options,hostId){const room=new Room(options,hostId);this.rooms.set(room.id,room);return room;}
+  createRoom(options,hostId){const room=this.attach(new Room(options,hostId));this.rooms.set(room.id,room);return room;}
+  attach(room){room.onEnded=record=>this.onGameEnded?.(record);return room;}
   getRoom(id){return this.rooms.get(id);}
-  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,playerCount:room.players.size,reservedCount:[...room.players.values()].filter(p=>p.connected===false).length,maxPlayers:room.maxPlayers,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
+  // `test` lets the deploy step ignore bot rooms when it waits for real games to end.
+  getRoomListSummary(){return [...this.rooms.values()].map(room=>({id:room.id,title:room.title,state:room.state,test:Boolean(room.testBotIds),playerCount:room.players.size,reservedCount:[...room.players.values()].filter(p=>p.connected===false).length,maxPlayers:room.maxPlayers,targetWinners:room.targetWinners,questionCount:room.questions.length}));}
   closeRoom(room){
     if(!room||this.rooms.get(room.id)!==room)return;
     if(room.timerHandle)clearTimeout(room.timerHandle);
@@ -780,11 +896,25 @@ class RoomManager {
   sweepExpired(now=Date.now()){
     if(this.sweeping)return;this.sweeping=true;
     try{for(const room of [...this.rooms.values()]){
-      for(const p of [...room.players.values()])if(p.connected===false&&(!Number.isFinite(p.disconnectedUntil)||p.disconnectedUntil<=now))room.expirePlayer(p.id,now);
-      if(this.rooms.has(room.id)&&room.state==='BREAK'&&room.stateEndTime>0&&now>=room.stateEndTime+2000)room.nextQuestion({skipPreparation:true});
+      try{
+        for(const p of [...room.players.values()])if(p.connected===false&&(!Number.isFinite(p.disconnectedUntil)||p.disconnectedUntil<=now))room.expirePlayer(p.id,now);
+        if(this.rooms.has(room.id))room.recoverOverduePhase(now);
+      }catch(error){console.error('ROOM_SWEEP_FAILED',room.id,error);}
     }this.cleanupEmptyRooms();}
     finally{this.sweeping=false;}
   }
+  // Bot rooms are recreated at startup and are not worth carrying over.
+  snapshot(now=Date.now()){return {version:1,savedAt:now,rooms:[...this.rooms.values()].filter(room=>!room.testBotIds&&room.players.size).map(room=>room.snapshot(now))};}
+  restore(data,{now=Date.now(),onExpire=null,maxAgeMs=10*60*1000}={}){
+    if(!data||data.version!==1||!Array.isArray(data.rooms)||!(now-data.savedAt<=maxAgeMs))return 0;
+    let restored=0;
+    for(const saved of data.rooms){
+      if(!saved?.id||this.rooms.has(saved.id))continue;
+      try{const room=this.attach(Room.restore(saved,{now,onExpire:()=>onExpire?.(room)}));this.rooms.set(room.id,room);restored++;}
+      catch(error){console.error('ROOM_RESTORE_FAILED',saved.id,error);}
+    }
+    return restored;
+  }
   close(){this.publicTestRoom?.close();if(this.worldInterval)clearInterval(this.worldInterval);if(this.maintenanceInterval)clearInterval(this.maintenanceInterval);for(const room of this.rooms.values()){if(room.timerHandle)clearTimeout(room.timerHandle);for(const p of room.players.values())if(p.disconnectTimer)clearTimeout(p.disconnectTimer);}}
 }
-module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS};
+module.exports={Room,computeZone,RoomManager,DEFAULT_QUIZ_LIST,ARENA_HALF_W,MAX_ROOM_PLAYERS,RECONNECT_GRACE_MS,RESTORE_EXTENSION_MS,WORLD_TICK_MS};

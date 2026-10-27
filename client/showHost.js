@@ -43,7 +43,7 @@ window.ShowHost=(()=>{
    ctx.beginPath();if(frame===2){ctx.ellipse(x+64,83,8,12,0,0,Math.PI*2);ctx.fill();}else{ctx.arc(x+64,73,15,.15*Math.PI,.85*Math.PI);ctx.stroke();}
    ctx.fillStyle='#eab55c';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText('MC',x+64,115);
   }
-  const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;texture.wrapS=texture.wrapT=T.ClampToEdgeWrapping;texture.repeat.set(.25,1);texture.generateMipmaps=false;texture.minFilter=texture.magFilter=T.LinearFilter;
+  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.ClampToEdgeWrapping;texture.repeat.set(.25,1);texture.generateMipmaps=false;texture.minFilter=texture.magFilter=T.LinearFilter;
   const face=new T.Mesh(new T.PlaneGeometry(.93,.52),new T.MeshBasicMaterial({map:texture}));face.position.set(0,2.28,.374);body.add(face);
   root.userData={showHost:true,body,face,texture,lastFrame:-1,triangles:count/3+2,drawCalls:2,visualHeight:3.065};return root;
  }
@@ -53,7 +53,7 @@ window.ShowHost=(()=>{
   const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=1024;
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#e5d9c8';ctx.fillRect(0,0,2048,1024);
-  const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;
+  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   const images=new Map();let selected='';
   function selectImage(layout){
     if(selected===layout)return;

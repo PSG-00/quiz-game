@@ -17,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="모두의 퀴즈" />
   <link rel="stylesheet" href="./style.css?v=42" />
   <link rel="stylesheet" href="./spectator.css?v=2" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="./vendor/three.bundle.min.js"></script>
 </head>
 <body>
   <div id="connection-notice" role="status" aria-live="polite" hidden></div>
@@ -93,7 +93,12 @@
           <label for="nickname-input">내 닉네임</label>
           <input type="text" id="nickname-input" maxlength="12" placeholder="닉네임 입력" autocomplete="off" />
           <button id="btn-avatar-picker" type="button" onclick="AvatarPicker.open()"><span id="selected-avatar-name">원이</span> · 아바타 선택</button>
-          <button id="btn-lobby-recover" type="button" onclick="recoverConnection()">↻ 연결 복구</button>
+          <button id="btn-lobby-recover" class="recover-button" type="button" onclick="recoverConnection()" title="서버와 연결을 새로 열어요" aria-busy="false">
+            <svg class="recover-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span class="recover-label">연결 복구</span>
+          </button>
         </div>
       </div>
 
@@ -131,6 +136,7 @@
         <div class="quiz-library-actions">
           <button id="btn-save-quiz" class="btn btn-primary" onclick="saveMyQuiz()">퀴즈 저장</button>
           <button class="btn btn-ghost" onclick="openMyQuizzes()">퀴즈 불러오기</button>
+          <button class="btn btn-ghost btn-results" type="button" onclick="openGameResults()">🏆 우승 기록</button>
         </div>
         <p id="my-quiz-status" class="my-quiz-status" role="status">작성한 퀴즈를 서버에 임시 저장할 수 있어요.</p>
         <div id="saved-quiz-code" class="saved-quiz-code hidden">
@@ -214,7 +220,7 @@
         <button id="btn-show-results" class="hidden" onclick="showWinnerModal(roomState)">결과 보기</button>
         <button id="btn-reset-game" onclick="resetGame()">↻ 새 게임</button>
         <div class="quiz-action-tools">
-          <button id="btn-recover-connection" type="button" onclick="recoverConnection()" title="연결을 새로 열고 최신 상태로 복구">↻ 연결 복구</button>
+          <button id="btn-recover-connection" class="recover-button" type="button" onclick="recoverConnection()" title="연결을 새로 열고 최신 상태로 복구" aria-busy="false"><span class="recover-icon" aria-hidden="true">↻</span><span class="recover-label">연결 복구</span></button>
           <button id="btn-low-spec" type="button" onclick="toggleLowSpecMode()" aria-pressed="false">저사양 모드</button>
           <button class="rules-link" onclick="document.getElementById('rules-dialog').showModal()">게임 규칙</button>
           <button id="btn-fullscreen" type="button" onclick="toggleFullScreen()" title="전체화면 전환">⛶ 전체화면</button>
@@ -388,6 +394,17 @@
       <button class="btn btn-ghost new-library-quiz" type="button" onclick="newLibraryQuiz()">+ 새 퀴즈 만들기</button>
     </div>
   </dialog>
+  <dialog id="results-dialog" aria-labelledby="results-heading">
+    <div class="my-quizzes-heading">
+      <h2 id="results-heading">🏆 우승 기록</h2>
+      <div class="results-actions">
+        <button class="btn btn-ghost" type="button" onclick="requestGameResults()">새로고침</button>
+        <button class="btn btn-ghost" type="button" onclick="this.closest('dialog').close()">닫기</button>
+      </div>
+    </div>
+    <p class="results-help">끝난 게임의 우승자를 최근 50개까지 보여 줘요. 닉네임이 같으면 # 뒤 식별번호로 구분하세요.</p>
+    <div id="results-list" class="results-list" aria-live="polite"></div>
+  </dialog>
   <dialog id="delete-quiz-dialog" aria-labelledby="delete-quiz-heading">
     <h2 id="delete-quiz-heading">저장한 퀴즈를 삭제할까요?</h2>
     <p id="delete-quiz-name"></p>
@@ -409,8 +426,6 @@
     </div>
     <p class="avatar-picker-hint">선택한 아바타로 입장해요. 다음 접속에도 유지됩니다.</p>
   </dialog>
-  <script src="./vendor/GLTFLoader.js"></script>
-  <script src="./vendor/SkeletonUtils.js"></script>
   <script src="./avatarCatalog.js?v=14"></script>
   <script src="./avatarMotion.js?v=2"></script>
   <script src="./avatarRig.js?v=2"></script>
@@ -424,11 +439,11 @@
   <script src="./raceRules.js?v=2"></script>
   <script src="./raceScene.js?v=2"></script>
   <script src="./quizBuilder.js?v=22"></script>
+  <script src="./gameResults.js"></script>
   <script src="./resultNotifications.js?v=1"></script>
   <script src="./mobileCrowd.js?v=4"></script>
   <script src="./framePacing.js?v=1"></script>
   <script src="./renderBudget.js?v=5"></script>
-  <script src="./vendor/FXAAShader.js"></script>
 <script src="./sceneClarity.js?v=3"></script>
   <script src="./crowdDecorations.js?v=2"></script>
   <script src="./showHost.js?v=7"></script>

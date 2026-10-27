@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test tests/*.test.cjs",
-    "test:50": "node scripts/load-test-room.cjs"
+    "test:50": "node scripts/load-test-room.cjs",
+    "build:three": "esbuild scripts/three-global.mjs --bundle --format=iife --minify --target=es2020 --outfile=client/vendor/three.bundle.min.js"
   },
   "dependencies": {
     "express": "^4.21.2",

@@ -225,7 +225,7 @@
     }
 
     const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
+    // No color space: r128 never applied this flag, and its unconverted look is the approved one.
     charTextureCache.set(key, tex);
     return tex;
   }
@@ -299,7 +299,6 @@
     ctx.fill();
 
     hostNpcTexture = new THREE.CanvasTexture(canvas);
-    hostNpcTexture.colorSpace = THREE.SRGBColorSpace;
     return hostNpcTexture;
   }
 
@@ -352,7 +351,6 @@
     }
 
     goldRingTexture = new THREE.CanvasTexture(canvas);
-    goldRingTexture.colorSpace = THREE.SRGBColorSpace;
     return goldRingTexture;
   }
 
@@ -496,7 +494,6 @@
     }
 
     const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
     floorLabelCache.set(key, tex);
     return tex;
   }

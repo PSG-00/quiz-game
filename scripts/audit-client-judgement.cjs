@@ -100,8 +100,9 @@ function control(command,data={}){return new Promise((resolve,reject)=>{const id
  await page.waitForFunction(()=>roomState?.state==='QUESTION'&&roomState.currentQuestion.type==='SHORT'&&playerEntities.get(myClientId).onStage);
  await page.evaluate(()=>{document.getElementById('short-answer-input').value='서울';submitShortAnswer();});
  await until(async()=>(await control('snapshot',{roomId})).players.find(p=>p.id===hostId).submitted);
- await page.evaluate(()=>ws.close());await page.waitForFunction(()=>currentRoomId===null);
- await page.waitForFunction(id=>currentRoomId&&myClientId===id&&playerEntities.get(id)?.hasSubmitted,hostId,{timeout:30000});
+ // The stage stays mounted while the seat is resumed on a new socket; it never bounces to the lobby.
+ await page.evaluate(()=>{window.auditClosedSocket=ws;ws.close();});
+ await page.waitForFunction(id=>ws!==auditClosedSocket&&connectionLive&&currentRoomId&&myClientId===id&&playerEntities.get(id)?.hasSubmitted,hostId,{timeout:30000});
  assert.equal(await page.locator('#short-answer-input').inputValue(),'서울');
  await page.reload();await page.waitForFunction(id=>currentRoomId&&myClientId===id&&playerEntities.get(id)?.hasSubmitted,hostId,{timeout:120000});
  assert.equal(await page.locator('#short-answer-input').inputValue(),'서울');

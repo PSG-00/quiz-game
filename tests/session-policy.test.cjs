@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {Room,RoomManager,computeZone}=require('../server/RoomManager');
+const {Room,RoomManager,computeZone,RECONNECT_GRACE_MS}=require('../server/RoomManager');
+const GRACE_END=1000+RECONNECT_GRACE_MS;
 const {RequestLimits}=require('../server/RequestLimits');
 const rules=require('../client/arenaRules');
 function room(t,questions){
@@ -29,11 +30,11 @@ test('연결 단절만으로 죽지 않지만 마지막 서버 좌표로 계속 
  assert.equal(r.resumePlayer(a,{readyState:1}),true);assert.equal(a.alive,false);assert.equal(a.eligible,true);assert.equal(r.hostId,'b');
 });
 
-test('30초 경계: 직전 복귀 허용, 정확히 만료 시 복귀 거절·퇴장 후 재입장은 관전',t=>{
+test('복귀 유예 경계: 직전 복귀 허용, 정확히 만료 시 복귀 거절·퇴장 후 재입장은 관전',t=>{
  const r=room(t);open(r);const a=r.players.get('a');r.disconnectPlayer('a',null,1000);
- assert.equal(r.resumePlayer(a,null,30999),true);r.disconnectPlayer('a',null,1000);
- assert.equal(r.resumePlayer(a,null,31000),false);assert.equal(r.expirePlayer('a',30999),false);
- assert.equal(r.expirePlayer('a',31000),true);assert.equal(r.players.has('a'),false);
+ assert.equal(r.resumePlayer(a,null,GRACE_END-1),true);r.disconnectPlayer('a',null,1000);
+ assert.equal(r.resumePlayer(a,null,GRACE_END),false);assert.equal(r.expirePlayer('a',GRACE_END-1),false);
+ assert.equal(r.expirePlayer('a',GRACE_END),true);assert.equal(r.players.has('a'),false);
  const late=r.addPlayer('new-a','다시 입장');assert.equal(late.eligible,false);assert.equal(late.alive,false);
 });
 
@@ -47,7 +48,7 @@ test('마지막 연결 단절은 방 유지, 유예 만료 후에만 빈 방과 
  const manager=new RoomManager({startLoop:false}),r=manager.createRoom({},'a');r.addPlayer('a','A');
  r.startGame();clearTimeout(r.timerHandle);
  r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms(),1000);manager.cleanupEmptyRooms();assert.equal(manager.getRoom(r.id),r);
- assert.equal(r.hostId,null);assert.equal(r.expirePlayer('a',31000),true);assert.equal(manager.getRoom(r.id),undefined);manager.close();
+ assert.equal(r.hostId,null);assert.equal(r.expirePlayer('a',GRACE_END),true);assert.equal(manager.getRoom(r.id),undefined);manager.close();
 });
 
 test('시작 전 단절은 즉시 퇴장·자리 해제·방장 승계, 복귀 예약 없음',t=>{
@@ -64,8 +65,8 @@ test('시작 전 마지막 사용자 단절은 방을 즉시 정리',()=>{
 test('만료 직전 타이머가 실행돼도 다시 예약하고, 타이머가 유실되면 주기 점검이 자리 정리',()=>{
  const manager=new RoomManager({startLoop:false}),r=manager.createRoom({},'a');r.addPlayer('a','A');r.startGame();clearTimeout(r.timerHandle);
  r.disconnectPlayer('a',()=>manager.cleanupEmptyRooms(),1000);const original=r.players.get('a').disconnectTimer;clearTimeout(original);
- assert.equal(r.expirePlayer('a',30999),false);assert.notEqual(r.players.get('a').disconnectTimer,original);
- clearTimeout(r.players.get('a').disconnectTimer);manager.sweepExpired(31000);assert.equal(manager.getRoom(r.id),undefined);manager.close();
+ assert.equal(r.expirePlayer('a',GRACE_END-1),false);assert.notEqual(r.players.get('a').disconnectTimer,original);
+ clearTimeout(r.players.get('a').disconnectTimer);manager.sweepExpired(GRACE_END);assert.equal(manager.getRoom(r.id),undefined);manager.close();
 });
 
 test('대기실로 초기화하면 끊긴 연결의 예약은 즉시 해제',t=>{

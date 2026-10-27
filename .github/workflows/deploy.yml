@@ -10,34 +10,46 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Preserve live quiz data before clean checkout
+      # A restart is survivable (rooms are restored), but a prize game should not see
+      # even a short blip. Before touching any file, wait while a real room is mid-game.
+      # After 30 minutes the deploy continues and the restored room carries on.
+      - name: Wait for running games to finish
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            live=$(curl -fsS --max-time 5 http://127.0.0.1:3000/api/rooms 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).rooms.filter(r=>!r.test&&!['WAITING','ENDED'].includes(r.state)).length)}catch{console.log(0)}})")
+            if [ "${live:-0}" = "0" ]; then exit 0; fi
+            echo "진행 중인 게임 ${live}개: 10초 뒤 다시 확인합니다."
+            sleep 10
+          done
+          echo "30분이 지나도 게임이 끝나지 않아 배포를 계속합니다. 방은 재시작 뒤 복원됩니다."
+
+      # Quiz data lives in ~/ox-quiz-data (OX_DATA_DIR in ecosystem.config.cjs).
+      # The running server is only stopped once, for the first copy out of the checkout.
+      - name: Move quiz data out of the checkout once
         shell: bash
         run: |
           umask 077
-          quiz_backup_dir="$(mktemp -d "$RUNNER_TEMP/quiz-data.XXXXXX")"
-          echo "QUIZ_DATA_BACKUP=$quiz_backup_dir" >> "$GITHUB_ENV"
-          if [ -d "$GITHUB_WORKSPACE/data" ]; then
+          data_dir="$HOME/ox-quiz-data"
+          if [ ! -d "$data_dir" ] && [ -d "$GITHUB_WORKSPACE/data" ]; then
             if pm2 describe ox-quiz-show > /dev/null 2>&1; then
               pm2 stop ox-quiz-show
             fi
-            cp -a "$GITHUB_WORKSPACE/data" "$quiz_backup_dir/data"
+            cp -a "$GITHUB_WORKSPACE/data" "$data_dir"
           fi
+          mkdir -p "$data_dir"
 
+      # The old process keeps serving games while the new code is checked out and installed.
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Restore only quiz data
-        shell: bash
-        run: |
-          if [ -d "$QUIZ_DATA_BACKUP/data" ]; then
-            cp -a "$QUIZ_DATA_BACKUP/data" "$GITHUB_WORKSPACE/data"
-          fi
 
       - name: Install dependencies
         run: |
           npm ci --omit=dev || npm install --omit=dev
 
-      - name: Deploy with PM2
+      # PM2 sends SIGINT; the server saves live rooms and the new process restores them,
+      # so connected players resume their seats instead of being sent to the lobby.
+      - name: Restart with PM2
         run: |
-          PORT=3000 pm2 startOrRestart ecosystem.config.cjs --env production
+          PORT=3000 pm2 startOrRestart ecosystem.config.cjs --env production --update-env
           pm2 save

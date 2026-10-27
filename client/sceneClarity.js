@@ -63,12 +63,15 @@
      initialize();renderer.getDrawingBufferSize(size);
      const nextWidth=Math.max(1,Math.floor(size.x*scale(selected))),nextHeight=Math.max(1,Math.floor(size.y*scale(selected)));
      if(!target){
-      // r128's depth-only renderbuffer is 16-bit. Use packed 24-bit depth/8-bit
+      // A depth-only renderbuffer can be 16-bit. Use packed 24-bit depth/8-bit
       // stencil to preserve thin overlapping hair/face geometry's depth precision.
       target=new T.WebGLRenderTarget(nextWidth,nextHeight,{minFilter:T.LinearFilter,magFilter:T.LinearFilter,depthBuffer:true,stencilBuffer:true});
       // Preserve the game's display-space blending/background exactly. CAS reads
       // raw encoded RGBA8 rather than hardware-decoded sRGB samples.
-      target.texture.encoding=T.sRGBEncoding;target.texture.internalFormat='RGBA8';target.texture.generateMipmaps=false;
+      target.texture.colorSpace=T.SRGBColorSpace;target.texture.internalFormat='RGBA8';target.texture.generateMipmaps=false;
+      // Since r152 only the canvas (or an XR target) gets shader-side sRGB output;
+      // this target stands in for the canvas, so it is flagged the same way.
+      target.isXRRenderTarget=true;
       width=nextWidth;height=nextHeight;
      }else if(width!==nextWidth||height!==nextHeight){width=nextWidth;height=nextHeight;target.setSize(width,height);}
      material.uniforms.source.value=target.texture;material.uniforms.texel.value.set(1/width,1/height);

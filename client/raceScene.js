@@ -5,7 +5,7 @@ window.RaceScene={create(scene,y){
  // are omitted so they never hide runners or the floor signs.
  merged([[4,.4,13.6,0,y-.2,-.2,0xf3f4ee],[9.6,.4,4.6,-4.8,y-.2,-9.3,0x7ad7bc],[9.6,.4,4.6,4.8,y-.2,-9.3,0xf5a0a0],[20,.2,3,0,-.1,9.8,0xe5dcef]]);
  merged([[19.6,4,.24,0,y+2,-11.6,0xf6ecd9],[.24,4,4.6,-9.6,y+2,-9.3,0xf6ecd9],[.24,4,4.6,9.6,y+2,-9.3,0xf6ecd9],[.24,1.05,13.6,-2,y+.525,-.2,0xefe8df],[.24,1.05,13.6,2,y+.525,-.2,0xefe8df]]);
- function canvasPlane(canvas,w,h,x,py,z,floor=false){const texture=new T.CanvasTexture(canvas);texture.encoding=T.sRGBEncoding;const mesh=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,alphaTest:.01}));mesh.position.set(x,py,z);if(floor)mesh.rotation.x=-Math.PI/2;root.add(mesh);return mesh;}
+ function canvasPlane(canvas,w,h,x,py,z,floor=false){const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,alphaTest:.01}));mesh.position.set(x,py,z);if(floor)mesh.rotation.x=-Math.PI/2;root.add(mesh);return mesh;}
  function floorLabel(text,x,z,color){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');ctx.fillStyle=color;ctx.beginPath();ctx.arc(128,128,115,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=7;ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 154px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,128,138);canvasPlane(c,2,2,x,y+.025,z,true);}
  function portal(x,color){
   // Two static canvas planes: no particles, dynamic lights or postprocessing.

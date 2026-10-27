@@ -33,7 +33,7 @@ window.InstancedAvatars=(()=>{
    return skin;
  }
  `;
- function attach(target,renderer){scene=target;supported=renderer.capabilities.floatVertexTextures&&renderer.capabilities.maxVertexTextures>0;maxTextureSize=renderer.capabilities.maxTextureSize;}
+ function attach(target,renderer){scene=target;supported=(renderer.capabilities.floatVertexTextures??true)&&renderer.capabilities.maxVertexTextures>0;maxTextureSize=renderer.capabilities.maxTextureSize;}
  function build(id){
    const model=id==='plana-original'?window.PlanaOriginalModel:AvatarModels[id];if(!scene||!supported||!model?.loaded)return null;
    const poseFrames=model.poseFrames??frames;
@@ -83,7 +83,7 @@ window.InstancedAvatars=(()=>{
      }
      for(const group of source.geometry.groups)geometry.addGroup(group.start,group.count,group.materialIndex);
      geometry.setAttribute('crowdPose',poses[level]);
-     const material=source.material.clone();material.skinning=false;
+     const material=source.material.clone();
      material.onBeforeCompile=shader=>{
        shader.uniforms.crowdBones={value:texture};shader.uniforms.crowdTextureSize={value:new T.Vector2(width,poseFrames+1)};
        shader.vertexShader=skinShader+shader.vertexShader;
