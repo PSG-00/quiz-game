@@ -1104,9 +1104,11 @@ document.addEventListener('visibilitychange',()=>{
  hiddenSince=0;
 });
 // A socket that never got WELCOME says which address failed; 1012/1013 are the server's own.
+// With the screen off a phone often has no network at all, so such a failure says nothing
+// about either address; counting it would only decide which one the phone wakes up on.
 function reportSocketFailure(socket,code){
  if(!socket||socket.oxWelcomed||socket.oxReported)return;socket.oxReported=true;
- if(code===1012||code===1013)return;
+ if(code===1012||code===1013||document.hidden)return;
  if(socket.oxPath==='direct')clientDiag.record('direct-failed',{code,detail:`${Date.now()-socket.oxStartedAt}ms`});
  connectionPath.failed(socket.oxPath);
 }
@@ -1114,11 +1116,29 @@ function reportSocketFailure(socket,code){
 // a passing blip must not keep this phone on the slower path for the next ten minutes.
 function probeDirectSocket(){
  let done=false,probe;
- const finish=ok=>{if(done)return;done=true;clearTimeout(timer);try{probe.close();}catch{}connectionPath.probed(ok);clientDiag.record('direct-probe',{detail:ok?'ok':'failed'});};
+ const finish=ok=>{
+  if(done)return;done=true;clearTimeout(timer);try{probe.close();}catch{}connectionPath.probed(ok);clientDiag.record('direct-probe',{detail:ok?'ok':'failed'});
+  if(ok&&ws?.oxPath==='cf'&&Date.now()-lastDirectSwitchAt>DIRECT_SWITCH_GAP_MS)directSwitchPending=true;
+ };
  const timer=setTimeout(()=>finish(false),DIRECT_CONNECT_MS);
  try{probe=new WebSocket(DIRECT_SOCKET_URL);}catch{finish(false);return;}
  probe.onmessage=event=>{try{if(JSON.parse(event.data).type==='WELCOME')finish(true);}catch{}};
  probe.onerror=probe.onclose=()=>finish(false);
+}
+// The direct address works but this socket landed on Cloudflare: move it back the way the
+// recovery button does (same seat), only in a calm phase with no question or timer, and not
+// under a dialog a reconnect would close (the rules dialog it leaves alone).
+// One move per five minutes, so a direct address that probes fine but drops cannot loop.
+const DIRECT_SWITCH_STATES=new Set(['WAITING','BREAK','ENDED']),DIRECT_SWITCH_GAP_MS=300000;
+let directSwitchPending=false,lastDirectSwitchAt=0;
+function maybeSwitchToDirect(now){
+ if(!directSwitchPending)return;
+ if(ws?.oxPath!=='cf'){directSwitchPending=false;return;}
+ if(!currentRoomId||!connectionLive||recoveryTimer||document.querySelector('dialog[open]:not(#rules-dialog)')||!DIRECT_SWITCH_STATES.has(roomState?.state))return;
+ if(roomState.state==='BREAK'&&roomState.stateEndTime-(now-serverTimeOffset)<4000)return;
+ directSwitchPending=false;lastDirectSwitchAt=now;
+ clientDiag.record('direct-switch',{detail:roomState.state});
+ hardRecoverConnection();
 }
 function scheduleReconnect(minDelay=0){
  if(connectionPaused||reconnectTimer)return;
@@ -1363,6 +1383,7 @@ function pollConnection(){
  if(currentRoomId&&serverFeatures.stateSync&&roomStateSync.due(roomState,now-serverTimeOffset,performance.now())){ws.send(JSON.stringify({type:'GET_ROOM_STATE',roomId:currentRoomId}));stateRequestAt||=now;}
  // Pongs can trickle through a jammed pipe; an unanswered state request cannot.
  if(stateRequestAt&&now-stateRequestAt>4000){stateRequestAt=0;noteOutage('state-timeout');hardRecoverConnection();return;}
+ maybeSwitchToDirect(now);
  if((connectionLive||libraryReady)&&now-lastDiagFlushAt>5000)flushDiagnostics();
 }
 setInterval(pollConnection,500);

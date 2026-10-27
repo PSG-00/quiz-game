@@ -10,9 +10,11 @@
 
 - 서버 환경 변수 `OX_DIRECT_WS_URL`이 있을 때만 페이지에 `<meta name="ox-direct-socket">`을 넣는다. 없으면 지금과 똑같이 페이지 주소로만 연결한다.
 - 새 연결은 직접 주소를 먼저 쓴다. 직접 연결이 4초 안에 열리지 않거나 WELCOME 전에 닫히면 다음 한 번은 Cloudflare로 연결한다.
-- Cloudflare 연결이 붙으면 직접 주소를 옆에서 한 번 확인한다. 확인도 실패하면 그 탭은 10분 동안 Cloudflare만 쓴다. 확인이 성공하면 순간적인 끊김으로 보고 다음 재접속에서 다시 직접 주소를 쓴다.
+- Cloudflare 연결이 붙으면 직접 주소를 옆에서 한 번 확인한다. 확인도 실패하면 그 탭은 10분 동안 Cloudflare만 쓴다.
+- 확인이 성공하면(직접 주소는 멀쩡한데 Cloudflare에 붙은 경우) 연결 복구 버튼과 같은 방식으로 같은 자리를 유지한 채 직접 주소로 옮긴다. 대기실(`WAITING`), 쉬는 시간(`BREAK`, 남은 시간 4초 이상), 게임 종료(`ENDED`)에서만 옮기고, 문제·판정·추첨 중이거나 재연결이 닫아 버리는 창(비밀번호·저장·우승 기록 등)이 열려 있으면 기다린다. 로비에서는 옮기지 않고 방에 들어간 뒤 옮긴다. 옮긴 뒤 5분 안에는 다시 옮기지 않는다.
 - 두 경로가 모두 실패하면 망 자체가 끊긴 것이므로 번갈아 시도한다. Cloudflare 장애 때는 막아 둔 직접 주소도 다시 시도한다.
-- 잘 붙어 있는 연결을 일부러 옮기지 않는다. 서버 재시작(1012)·접속 인원 초과(1013)는 경로 실패로 세지 않는다.
+- 화면이 꺼져 있거나 다른 앱에 가 있는 동안(`document.hidden`)의 실패는 세지 않는다. 안드로이드는 이때 크롬의 인터넷을 막아 어느 주소든 수십 ms 만에 실패하므로 경로에 대한 정보가 없다. 그래서 화면을 켜면 항상 직접 주소부터 시도한다.
+- 서버 재시작(1012)·접속 인원 초과(1013)는 경로 실패로 세지 않는다.
 
 ## 로그
 
@@ -21,9 +23,10 @@
 - `CLIENT_DIAG`의 모든 항목에 그 순간의 `path`가 붙고, 다음 이유가 추가됐다.
   - `direct-failed`: 직접 연결이 WELCOME 전에 실패함. `detail`은 걸린 시간, `code`는 종료 코드.
   - `direct-probe`: Cloudflare로 붙은 뒤 직접 주소 확인 결과(`ok`/`failed`).
+  - `direct-switch`: 확인 결과가 `ok`여서 직접 주소로 옮김. `detail`은 옮긴 시점의 게임 단계.
 
 ```bash
-grep -h -E "CONNECTION_PATHS|direct-failed|direct-probe" ~/.pm2/logs/ox-quiz-show-out*.log | tail -20
+grep -h -E "CONNECTION_PATHS|direct-failed|direct-probe|direct-switch" ~/.pm2/logs/ox-quiz-show-out*.log | tail -20
 ```
 
 ## 서버 설정 (한 번만)

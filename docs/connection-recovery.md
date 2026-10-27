@@ -55,6 +55,6 @@
 | `returned` | 다른 앱에 갔다가 `awayMs` 만에 돌아옴 |
 | `page-reloaded` | 게임 중 새로고침하거나 다시 열어 `awayMs` 만에 돌아옴 |
 | `render-error` / `world-error` / `js-error` | 화면 갱신·월드 갱신·스크립트 오류(`detail`에 메시지) |
-| `direct-failed` / `direct-probe` | 직접 주소 연결 실패 / Cloudflare로 붙은 뒤 직접 주소 확인 결과([direct-connection.md](direct-connection.md)) |
+| `direct-failed` / `direct-probe` / `direct-switch` | 직접 주소 연결 실패(화면이 켜져 있을 때만) / Cloudflare로 붙은 뒤 직접 주소 확인 결과 / 직접 주소로 되돌림([direct-connection.md](direct-connection.md)) |
 
 모든 항목에는 그 순간의 `gapMs`(마지막 패킷 이후 시간), `rttMs`·`minRttMs`(왕복 지연), `fps`, `maxFrameMs`(직전 보고 이후 가장 긴 프레임), `state`, `hidden`, `attempts`(재접속 시도), `net`(브라우저가 알려 주는 망 종류), `path`(직접 주소가 켜져 있을 때 `direct`/`cf`), `device`(예: `android/kakaotalk`, `ios/safari`), `ago`(기기 시계로 잰 경과 시간)가 함께 남는다. 연결당 5초에 한 묶음, 묶음당 10건까지만 받고 알려진 필드만 길이를 제한해 기록한다.
