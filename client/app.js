@@ -294,43 +294,6 @@ worldGroup.add(shortFloorGroup);
 const singleStage = createStageZone(ARENA_HALF_W * 2, stageDepth, 0x4cd4b0, '', '', 0, stageCenterZ);
 shortFloorGroup.add(singleStage.group);
 
-// 바닥 터치 이동용 레이캐스트 평면
-const rayPlaneGeo = new THREE.PlaneGeometry(100, 200);
-const rayPlaneMat = new THREE.MeshBasicMaterial({ visible: false });
-const rayPlane = new THREE.Mesh(rayPlaneGeo, rayPlaneMat);
-rayPlane.rotation.x = -Math.PI / 2;
-rayPlane.position.y = STAGE_HEIGHT;
-scene.add(rayPlane);
-
-const raycaster = new THREE.Raycaster();
-const mouseNDC = new THREE.Vector2();
-
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!canMove()) return;
-  const rect = renderer.domElement.getBoundingClientRect();
-  mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-  const onStage = playerEntities.get(myClientId)?.onStage;
-  rayPlane.position.y = onStage ? STAGE_HEIGHT : 0;
-  rayPlane.updateMatrixWorld();
-  raycaster.setFromCamera(mouseNDC, camera);
-  const hits = raycaster.intersectObject(rayPlane);
-  if (hits.length > 0) {
-    const rawHit = hits[0].point;
-    const hit = {x:rawHit.x/layoutScaleX,z:rawHit.z/layoutScaleZ};
-    const pt = onStage ? screenToStage(hit.x, hit.z) : spectatorFromScene(rawHit.x,rawHit.z);
-    if(raceActive&&onStage){
-      const dest=pt.z<=RaceRules.FRONT_Z?{x:Math.max(-8.8,Math.min(8.8,pt.x)),z:Math.max(RaceRules.MIN_Z+.2,Math.min(RaceRules.FRONT_Z-.2,pt.z))}:{x:Math.max(-1.4,Math.min(1.4,pt.x)),z:Math.max(RaceRules.FRONT_Z-.2,Math.min(6,pt.z))};
-      myMoveTarget=(myPos.z>RaceRules.FRONT_Z&&Math.abs(dest.x)>1.65||Math.abs(myPos.x)>1.65&&dest.z>RaceRules.FRONT_Z)?{x:0,z:RaceRules.JUNCTION_Z,after:dest}:dest;return;
-    }
-    const minZ = onStage ? STAGE_MIN_Z + .8 : SPECTATOR_MIN_Z;
-    const maxZ = onStage ? STAGE_MAX_Z - .8 : SPECTATOR_MAX_Z;
-    const halfW = onStage ? ARENA_HALF_W - .8 : SPECTATOR_HALF_W;
-    myMoveTarget = {x:Math.max(-halfW,Math.min(halfW,pt.x)),z:Math.max(minZ,Math.min(maxZ,pt.z))};
-  }
-});
-
 // 텍스트 입력에 포커스가 있을 때 키보드 이동 입력을 중지
 function isInputFocused() {
   const el = document.activeElement;
@@ -355,8 +318,11 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// Portrait-only analogue stick. Pointer capture keeps movement working when a
-// finger leaves the ring; releasing/cancelling always clears the movement.
+// Phones and tablets move with this stick (portrait and landscape), keyboards with WASD or the
+// arrow keys. Tapping the stage moves nobody: a tap meant for chat used to walk players into
+// the wrong zone, which felt like a lag teleport. Pointer capture keeps movement working when
+// a finger leaves the ring; releasing/cancelling always clears the movement.
+const TOUCH_CONTROLS=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0;
 const joystickRoot=document.getElementById('movement-joystick');
 const joystickBase=document.getElementById('joystick-base');
 const joystickKnob=document.getElementById('joystick-knob');
@@ -377,7 +343,7 @@ function updateJoystickPointer(event){
   joystickKnob.style.transform=`translate(${distance?dx/distance*travel:0}px,${distance?dz/distance*travel:0}px)`;
 }
 joystickBase.addEventListener('pointerdown',event=>{
-  if(event.button!==0||joystick.pointerId!==null||!portraitScreen()||!canMove())return;
+  if(event.button!==0||joystick.pointerId!==null||!TOUCH_CONTROLS||!canMove())return;
   event.preventDefault();event.stopPropagation();
   joystick.pointerId=event.pointerId;myMoveTarget=null;
   joystickBase.setPointerCapture(event.pointerId);joystickBase.classList.add('is-active');
@@ -397,7 +363,6 @@ function portraitScreen() { return window.innerHeight > window.innerWidth; }
 function sceneLayout(x,z) { return {x:x*layoutScaleX,z:z*layoutScaleZ}; }
 function spectatorSceneStart(){return (STAGE_MAX_Z+1)*layoutScaleZ+1.2;}
 function spectatorToScene(x,z) { return {x:x*layoutScaleX,z:spectatorSceneStart()+(z-SPECTATOR_MIN_Z)*.7}; }
-function spectatorFromScene(x,z) { return {x:x/layoutScaleX,z:SPECTATOR_MIN_Z+(z-spectatorSceneStart())/.7}; }
 // All devices share one wide board and the same left/right answer directions.
 function stageToScreen(x,z) { return {x,z}; }
 function syncRaceScene(){
@@ -423,7 +388,6 @@ function receiveRaceState(msg){
  if(reset&&msg.participant){myPos={x:msg.x,z:msg.z};myMoveTarget=null;lastSentPosKey='';const entity=playerEntities.get(myClientId);if(entity){entity.x=entity.targetX=msg.x;entity.z=entity.targetZ=msg.z;entity.motion.teleporting=true;}raceScene?.reset();}
  renderRaceInfo();updateQuestionReadability();
 }
-function screenToStage(x,z) { return {x,z}; }
 function fitStageCamera(w,h){
   camera.aspect=w/h;camera.clearViewOffset();camera.updateProjectionMatrix();
   const wasFollowing=cameraFollow.enabled;
@@ -860,7 +824,7 @@ function animate(frameTime) {
   clock.update(frameTime);
   const dt = Math.min(clock.getDelta(), 0.1);
   restoreAvatarDetails();
-  const joystickEnabled=portraitScreen()&&canMove();
+  const joystickEnabled=TOUCH_CONTROLS&&canMove();
   joystickRoot.classList.toggle('hidden',!joystickEnabled);
   if(!joystickEnabled&&(joystick.pointerId!==null||joystick.x||joystick.z))resetJoystick();
 
